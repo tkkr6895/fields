@@ -1,0 +1,2 @@
+grid_id,mws_id,district,old_growth_pct,n_records,start_date,end_date,avg_precipitation,avg_et,avg_runoff,total_precipitation,total_et,total_runoff,avg_water_deficit
+22,2_21917,VIRUDHUNAGAR,84.73330445354314,208,2017-07-01,2025-06-07,46.480336538461536,50.33081730769231,2.2247596153846154,9667.91,10468.81,462.75,-6.075240384615384

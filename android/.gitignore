@@ -89,13 +89,13 @@ lint/tmp/
 # Android Profiling
 *.hprof
 
-# Cordova plugins for Capacitor
-capacitor-cordova-android-plugins
+# Cordova plugins for Capacitor - DO NOT IGNORE, needed for build
+# capacitor-cordova-android-plugins
 
-# Copied web assets
-app/src/main/assets/public
+# Copied web assets - DO NOT IGNORE, needed for build
+# app/src/main/assets/public
 
-# Generated Config files
-app/src/main/assets/capacitor.config.json
-app/src/main/assets/capacitor.plugins.json
-app/src/main/res/xml/config.xml
+# Generated Config files - DO NOT IGNORE, needed for build
+# app/src/main/assets/capacitor.config.json
+# app/src/main/assets/capacitor.plugins.json
+# app/src/main/res/xml/config.xml

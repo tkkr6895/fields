@@ -1,0 +1,61 @@
+# Dependencies
+node_modules/
+.pnp/
+.pnp.js
+
+# Build outputs
+dist/
+*.local
+
+# Android build outputs (large files)
+android/.gradle/
+android/app/build/
+android/build/
+android/.idea/
+android/local.properties
+*.apk
+*.aab
+
+# iOS (if added later)
+ios/
+
+# Environment and credentials - NEVER COMMIT THESE
+.env
+.env.local
+.env.*.local
+*.key
+*.keystore
+*.jks
+google-services.json
+GoogleService-Info.plist
+
+# API keys and secrets
+**/secrets/
+**/credentials/
+corestack_api_key.txt
+gee_credentials.json
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# Test coverage
+coverage/
+
+# TypeScript cache
+*.tsbuildinfo
+
+# Capacitor
+android/app/src/main/assets/capacitor.config.json

@@ -1,0 +1,367 @@
+{
+  "region": "Western Ghats",
+  "generated": "2025-12-27T22:30:02.800Z",
+  "version": "1.0.0",
+  "layers": [
+    {
+      "id": "western_ghats_boundary",
+      "title": "Western Ghats Boundary",
+      "type": "vector",
+      "source": {
+        "format": "geojson",
+        "path": "/data/boundaries/western_ghats_boundary.geojson"
+      },
+      "style": {
+        "kind": "polygon",
+        "colors": {
+          "default": "#4a9eff33"
+        }
+      },
+      "query": {
+        "mode": "feature_at_point",
+        "fields": [
+          "REC_NUM"
+        ]
+      },
+      "category": "boundary",
+      "enabled": true
+    },
+    {
+      "id": "dakshina_kannada_boundary",
+      "title": "Dakshina Kannada District",
+      "type": "vector",
+      "source": {
+        "format": "geojson",
+        "path": "/data/boundaries/dakshina_kannada_boundary.geojson"
+      },
+      "style": {
+        "kind": "polygon",
+        "colors": {
+          "default": "#ff9800aa"
+        }
+      },
+      "query": {
+        "mode": "feature_at_point",
+        "fields": []
+      },
+      "category": "boundary",
+      "enabled": true
+    },
+    {
+      "id": "lulc_glc_composition",
+      "title": "LULC Composition (GLC 1987-2010)",
+      "type": "csv",
+      "source": {
+        "format": "csv",
+        "path": "/data/lulc/dakshina_kannada_lulc_glc_composition.csv"
+      },
+      "style": {
+        "kind": "categorical",
+        "field": "class_name"
+      },
+      "query": {
+        "mode": "summary",
+        "fields": [
+          "year",
+          "class_name",
+          "area_km2",
+          "percent"
+        ]
+      },
+      "category": "lulc",
+      "enabled": true
+    },
+    {
+      "id": "tree_cover_glc",
+      "title": "Tree Cover (GLC)",
+      "type": "csv",
+      "source": {
+        "format": "csv",
+        "path": "/data/lulc/dakshina_kannada_tree_cover_glc.csv"
+      },
+      "style": {
+        "kind": "choropleth",
+        "field": "tree_cover_pct"
+      },
+      "query": {
+        "mode": "summary",
+        "fields": [
+          "year",
+          "tree_cover_km2"
+        ]
+      },
+      "category": "lulc",
+      "enabled": true
+    },
+    {
+      "id": "built_area_glc",
+      "title": "Built Area (GLC)",
+      "type": "csv",
+      "source": {
+        "format": "csv",
+        "path": "/data/lulc/dakshina_kannada_built_glc.csv"
+      },
+      "style": {
+        "kind": "choropleth",
+        "field": "built_pct"
+      },
+      "query": {
+        "mode": "summary",
+        "fields": [
+          "year",
+          "built_km2"
+        ]
+      },
+      "category": "lulc",
+      "enabled": true
+    },
+    {
+      "id": "built_area_dw",
+      "title": "Built Area (Dynamic World 2018-2025)",
+      "type": "csv",
+      "source": {
+        "format": "csv",
+        "path": "/data/lulc/dakshina_kannada_built_dynamic_world.csv"
+      },
+      "style": {
+        "kind": "choropleth",
+        "field": "built_pct"
+      },
+      "query": {
+        "mode": "summary",
+        "fields": [
+          "year",
+          "built_km2"
+        ]
+      },
+      "category": "lulc",
+      "enabled": true
+    },
+    {
+      "id": "dynamic_world_regional",
+      "title": "Dynamic World Regional (2018-2025)",
+      "type": "csv",
+      "source": {
+        "format": "csv",
+        "path": "/data/dynamicworld/wg_dynamic_world_2018_2025.csv"
+      },
+      "style": {
+        "kind": "categorical",
+        "field": "landcover"
+      },
+      "query": {
+        "mode": "summary",
+        "fields": [
+          "year",
+          "Trees",
+          "Built",
+          "Crops",
+          "Shrub and Scrub"
+        ]
+      },
+      "category": "dynamicworld",
+      "enabled": true
+    },
+    {
+      "id": "lulc_complete_historical",
+      "title": "Complete LULC Historical (1987-2025)",
+      "type": "csv",
+      "source": {
+        "format": "csv",
+        "path": "/data/treecover/wg_lulc_complete_1987_2025.csv"
+      },
+      "style": {
+        "kind": "choropleth",
+        "field": "tree_cover"
+      },
+      "query": {
+        "mode": "summary",
+        "fields": [
+          "year",
+          "tree_cover",
+          "built_area",
+          "cropland"
+        ]
+      },
+      "category": "lulc",
+      "enabled": true
+    },
+    {
+      "id": "forest_typology",
+      "title": "Forest Typology",
+      "type": "csv",
+      "source": {
+        "format": "csv",
+        "path": "/data/forest/dakshina_kannada_forest_typology.csv"
+      },
+      "style": {
+        "kind": "categorical",
+        "field": "forest_type"
+      },
+      "query": {
+        "mode": "summary",
+        "fields": [
+          "forest_type",
+          "area_km2"
+        ]
+      },
+      "category": "forest",
+      "enabled": true
+    },
+    {
+      "id": "district_forest_typology",
+      "title": "District Forest Typology",
+      "type": "csv",
+      "source": {
+        "format": "csv",
+        "path": "/data/forest/district_forest_typology.csv"
+      },
+      "style": {
+        "kind": "categorical",
+        "field": "forest_type"
+      },
+      "query": {
+        "mode": "summary",
+        "fields": [
+          "district",
+          "forest_type",
+          "area_km2"
+        ]
+      },
+      "category": "forest",
+      "enabled": true
+    },
+    {
+      "id": "corestack_blocks",
+      "title": "CoreStack Blocks (Dakshina Kannada)",
+      "type": "csv",
+      "source": {
+        "format": "csv",
+        "path": "/data/corestack/dakshina_kannada_corestack_blocks.csv"
+      },
+      "style": {
+        "kind": "categorical",
+        "field": "block_type"
+      },
+      "query": {
+        "mode": "summary",
+        "fields": [
+          "block_name",
+          "block_type",
+          "area_ha"
+        ]
+      },
+      "category": "corestack",
+      "enabled": true
+    },
+    {
+      "id": "cropping_intensity",
+      "title": "Cropping Intensity Analysis",
+      "type": "csv",
+      "source": {
+        "format": "csv",
+        "path": "/data/corestack/cropping_intensity_analysis.csv"
+      },
+      "style": {
+        "kind": "choropleth",
+        "field": "cropping_intensity"
+      },
+      "query": {
+        "mode": "summary",
+        "fields": [
+          "district",
+          "cropping_intensity",
+          "irrigated_pct"
+        ]
+      },
+      "category": "corestack",
+      "enabled": true
+    },
+    {
+      "id": "water_balance",
+      "title": "Water Balance Summary",
+      "type": "csv",
+      "source": {
+        "format": "csv",
+        "path": "/data/corestack/water_balance_summary.csv"
+      },
+      "style": {
+        "kind": "choropleth",
+        "field": "water_balance"
+      },
+      "query": {
+        "mode": "summary",
+        "fields": [
+          "district",
+          "rainfall_mm",
+          "runoff_mm",
+          "et_mm"
+        ]
+      },
+      "category": "corestack",
+      "enabled": true
+    },
+    {
+      "id": "urbanization_analysis",
+      "title": "District Urbanization Analysis",
+      "type": "csv",
+      "source": {
+        "format": "csv",
+        "path": "/data/analysis/district_urbanization_analysis.csv"
+      },
+      "style": {
+        "kind": "choropleth",
+        "field": "urbanization_rate"
+      },
+      "query": {
+        "mode": "summary",
+        "fields": [
+          "district",
+          "built_area_km2",
+          "growth_rate"
+        ]
+      },
+      "category": "analysis",
+      "enabled": true
+    },
+    {
+      "id": "district_coverage",
+      "title": "WG District Coverage (CoreStack)",
+      "type": "csv",
+      "source": {
+        "format": "csv",
+        "path": "/data/coverage/wg_district_coverage.csv"
+      },
+      "style": {
+        "kind": "categorical",
+        "field": "corestack_covered"
+      },
+      "query": {
+        "mode": "summary",
+        "fields": [
+          "state",
+          "district",
+          "corestack_covered"
+        ]
+      },
+      "category": "corestack",
+      "enabled": true
+    }
+  ],
+  "basemaps": [
+    {
+      "id": "dark",
+      "type": "vector",
+      "title": "Dark Map",
+      "offline": false,
+      "source": "carto-dark"
+    },
+    {
+      "id": "satellite",
+      "type": "raster",
+      "title": "Satellite",
+      "offline": false,
+      "source": "esri-satellite"
+    }
+  ]
+}

@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">WG Field Validator</string>
+    <string name="title_activity_main">WG Field Validator</string>
+    <string name="package_name">org.westernghats.fieldvalidator</string>
+    <string name="custom_url_scheme">org.westernghats.fieldvalidator</string>
+</resources>

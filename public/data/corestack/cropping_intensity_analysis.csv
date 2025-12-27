@@ -1,0 +1,2 @@
+grid_id,mws_id,district,state,old_growth_pct,plantation_pct,grid_type,cropping_intensity_avg,cropping_intensity_trend,avg_single_cropped,avg_double_cropped,avg_triple_cropped,avg_precipitation,avg_runoff,avg_number_dry_spell,terraincluster_id
+22,2_21917,VIRUDHUNAGAR,TAMIL NADU,84.73330445354314,15.266695546456868,conservation,1.44,0,79117.5032,231396.3201,316404.7224,1208.4825,189.9488,0.0,2

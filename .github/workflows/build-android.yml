@@ -39,8 +39,10 @@ jobs:
       - name: Build web app
         run: npm run build
 
-      - name: Sync Capacitor
-        run: npx cap sync android
+      # Skip cap sync - assets are pre-committed to avoid regeneration issues
+      - name: Copy web assets to Android
+        run: |
+          cp -r dist/* android/app/src/main/assets/public/
 
       - name: Build Debug APK
         working-directory: android

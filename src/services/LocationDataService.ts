@@ -7,40 +7,60 @@
  * 3. Dynamic World (LULC) - local cache + GEE API
  * 4. Weather API
  * 
- * Prioritizes local data and falls back to API when needed.
+ * CRITICAL: This service ONLY returns authentic data.
+ * - Uses point-in-polygon with actual boundary GeoJSONs for admin data
+ * - Never estimates or synthesizes data
+ * - Clearly marks data sources and indicates when data is unavailable
  */
 
+// @ts-ignore - turf types issue with package.json exports
+import * as turf from '@turf/turf';
 import { DatasetManager } from './DatasetManager';
 import { coreStackService } from './CoreStackService';
 import { dynamicWorldService } from './DynamicWorldService';
 import { weatherService, WeatherData } from './WeatherService';
 import type { DatasetValues } from '../types';
 
+// Boundary data for point-in-polygon checks
+interface BoundaryData {
+  id: string;
+  geojson: GeoJSON.FeatureCollection | null;
+  loaded: boolean;
+}
+
 export interface LocationEnrichment {
   coordinates: { lat: number; lon: number };
   timestamp: string;
   
-  // Administrative data
+  // Administrative data - ONLY from authentic sources
   admin?: {
     state?: string;
     district?: string;
     tehsil?: string;
     village?: string;
-    source: 'local' | 'corestack';
+    block?: string;
+    source: 'boundary_geojson' | 'corestack_api' | 'corestack_local';
+    confidence: 'verified' | 'approximate';
   };
   
-  // Land cover data
+  // Land cover data - ONLY from authentic sources
   landCover?: {
-    dominantClass?: string;
-    trees?: number;
-    crops?: number;
-    built?: number;
-    water?: number;
-    shrubAndScrub?: number;
-    grass?: number;
-    bare?: number;
-    year?: number;
-    source: 'local' | 'dynamicworld' | 'estimated';
+    // Regional summary data (from local CSV)
+    regionalSummary?: {
+      dominantClass: string;
+      trees: number;
+      crops: number;
+      built: number;
+      water: number;
+      shrubAndScrub: number;
+      grass: number;
+      bare: number;
+      year: number;
+    };
+    // Note: Point-specific LULC requires GEE integration (not available offline)
+    pointDataAvailable: boolean;
+    source: 'dynamicworld_regional' | 'dynamicworld_point' | 'unavailable';
+    note?: string;
   };
   
   // Watershed data
@@ -48,7 +68,7 @@ export interface LocationEnrichment {
     mwsId?: string;
     name?: string;
     indicators?: Record<string, unknown>;
-    source: 'local' | 'corestack';
+    source: 'corestack_local' | 'corestack_api';
   };
   
   // Weather
@@ -60,11 +80,24 @@ export interface LocationEnrichment {
   // Status
   isOnline: boolean;
   errors: string[];
+  warnings: string[];
 }
 
 class LocationDataService {
   private datasetManager: DatasetManager;
   private initialized = false;
+  
+  // Cached boundary data for point-in-polygon checks
+  private boundaries: Map<string, BoundaryData> = new Map([
+    ['dakshina_kannada', { id: 'dakshina_kannada', geojson: null, loaded: false }],
+    ['western_ghats', { id: 'western_ghats', geojson: null, loaded: false }]
+  ]);
+  
+  // Local CoreStack data cache
+  private localCoreStackData: {
+    blocks: Array<{ state: string; district: string; block: string; block_id?: string; raw?: string }>;
+    loaded: boolean;
+  } = { blocks: [], loaded: false };
   
   constructor() {
     this.datasetManager = new DatasetManager();
@@ -72,13 +105,113 @@ class LocationDataService {
   
   async initialize(): Promise<void> {
     if (this.initialized) return;
+    
+    // Initialize dataset manager
     await this.datasetManager.initialize();
+    
+    // Load boundary GeoJSONs for point-in-polygon checks
+    await this.loadBoundaries();
+    
+    // Load local CoreStack data
+    await this.loadLocalCoreStackData();
+    
+    // Load Dynamic World cache
     await dynamicWorldService.loadCachedData();
+    
     this.initialized = true;
   }
   
   /**
+   * Load boundary GeoJSONs for authentic point-in-polygon admin lookups
+   */
+  private async loadBoundaries(): Promise<void> {
+    const boundaryPaths: Record<string, string> = {
+      'dakshina_kannada': '/data/boundaries/dakshina_kannada_boundary.geojson',
+      'western_ghats': '/data/boundaries/western_ghats_boundary.geojson'
+    };
+    
+    for (const [id, path] of Object.entries(boundaryPaths)) {
+      try {
+        const response = await fetch(path);
+        if (response.ok) {
+          const geojson = await response.json();
+          this.boundaries.set(id, { id, geojson, loaded: true });
+          console.log(`[LocationDataService] Loaded boundary: ${id}`);
+        }
+      } catch (err) {
+        console.warn(`[LocationDataService] Failed to load boundary ${id}:`, err);
+      }
+    }
+  }
+  
+  /**
+   * Load local CoreStack CSV data
+   */
+  private async loadLocalCoreStackData(): Promise<void> {
+    try {
+      const response = await fetch('/data/corestack/dakshina_kannada_corestack_blocks.csv');
+      if (response.ok) {
+        const text = await response.text();
+        const lines = text.trim().split('\n');
+        const headers = lines[0].split(',');
+        
+        this.localCoreStackData.blocks = lines.slice(1).map(line => {
+          const values = line.split(',');
+          const record: Record<string, string> = {};
+          headers.forEach((h, i) => {
+            record[h.trim()] = values[i]?.trim() || '';
+          });
+          
+          // Parse raw JSON if present to extract block_id
+          if (record.raw) {
+            try {
+              const rawData = JSON.parse(record.raw.replace(/^"|"$/g, '').replace(/""/g, '"'));
+              record.block_id = rawData.block_id?.toString();
+            } catch {
+              // Ignore JSON parse errors
+            }
+          }
+          
+          return record as { state: string; district: string; block: string; block_id?: string; raw?: string };
+        });
+        
+        this.localCoreStackData.loaded = true;
+        console.log(`[LocationDataService] Loaded ${this.localCoreStackData.blocks.length} CoreStack blocks`);
+      }
+    } catch (err) {
+      console.warn('[LocationDataService] Failed to load CoreStack blocks:', err);
+    }
+  }
+  
+  /**
+   * Check if a point is inside a boundary using authentic point-in-polygon
+   */
+  private isPointInBoundary(lat: number, lon: number, boundaryId: string): { inside: boolean; properties?: Record<string, unknown> } {
+    const boundary = this.boundaries.get(boundaryId);
+    if (!boundary?.geojson || !boundary.loaded) {
+      return { inside: false };
+    }
+    
+    const point = turf.point([lon, lat]);
+    
+    for (const feature of boundary.geojson.features) {
+      if (feature.geometry.type === 'Polygon' || feature.geometry.type === 'MultiPolygon') {
+        try {
+          if (turf.booleanPointInPolygon(point, feature as turf.Feature<turf.Polygon | turf.MultiPolygon>)) {
+            return { inside: true, properties: feature.properties || {} };
+          }
+        } catch (err) {
+          console.warn(`Point-in-polygon check failed for ${boundaryId}:`, err);
+        }
+      }
+    }
+    
+    return { inside: false };
+  }
+  
+  /**
    * Get comprehensive location data from all available sources
+   * ONLY returns authentic data - never estimates or synthesizes
    */
   async enrichLocation(lat: number, lon: number, isOnline: boolean = navigator.onLine): Promise<LocationEnrichment> {
     await this.initialize();
@@ -87,7 +220,8 @@ class LocationDataService {
       coordinates: { lat, lon },
       timestamp: new Date().toISOString(),
       isOnline,
-      errors: []
+      errors: [],
+      warnings: []
     };
     
     // Fetch all data in parallel
@@ -145,10 +279,15 @@ class LocationDataService {
   }
   
   /**
-   * Get administrative data - prefer CoreStack API, fallback to local
+   * Get administrative data using AUTHENTIC sources only:
+   * 1. CoreStack API (most detailed - state, district, tehsil)
+   * 2. Local boundary GeoJSONs (verified point-in-polygon)
+   * 3. Local CoreStack blocks CSV
+   * 
+   * NEVER estimates or uses bounding boxes
    */
   private async getAdminData(lat: number, lon: number, isOnline: boolean): Promise<LocationEnrichment['admin'] | null> {
-    // Try CoreStack API first if online
+    // Try CoreStack API first if online (most accurate)
     if (isOnline && coreStackService.hasApiKey()) {
       try {
         const admin = await coreStackService.getAdminDetailsByLatLon(lat, lon);
@@ -157,54 +296,74 @@ class LocationDataService {
             state: admin.state_name,
             district: admin.district_name,
             tehsil: admin.tehsil_name,
-            source: 'corestack'
+            source: 'corestack_api',
+            confidence: 'verified'
           };
         }
       } catch (err) {
-        console.warn('CoreStack admin fetch failed:', err);
+        console.warn('[LocationDataService] CoreStack API admin fetch failed:', err);
       }
     }
     
-    // Fallback to local data - check boundaries
-    // For now, just indicate the location is in Western Ghats region
-    // Full boundary checks would require @turf/turf for point-in-polygon
-    try {
-      // Simplified boundary check using approximate bounding box
-      // Western Ghats approximate bounds: 8°N-21°N, 73°E-78°E
-      const isInWesternGhats = lat >= 8 && lat <= 21 && lon >= 73 && lon <= 78;
+    // Fallback to LOCAL boundary GeoJSONs with authentic point-in-polygon
+    // Check Dakshina Kannada first (more specific)
+    const dkCheck = this.isPointInBoundary(lat, lon, 'dakshina_kannada');
+    if (dkCheck.inside && dkCheck.properties) {
+      // Extract admin info from boundary properties
+      const state = dkCheck.properties.ST_NM as string || dkCheck.properties.state as string;
+      const district = dkCheck.properties.DISTRICT as string || dkCheck.properties.district as string;
       
-      if (isInWesternGhats) {
-        // More specific: Dakshina Kannada district approx bounds
-        const isInDK = lat >= 12.5 && lat <= 13.5 && lon >= 74.5 && lon <= 75.8;
-        
-        if (isInDK) {
-          return {
-            state: 'Karnataka',
-            district: 'Dakshina Kannada (estimated)',
-            source: 'local'
-          };
-        }
-        
-        return {
-          state: 'Western Ghats Region',
-          source: 'local'
-        };
-      }
-    } catch (err) {
-      console.warn('Local admin check failed:', err);
+      // Check if we have local CoreStack block data for more detail
+      const localBlock = this.getLocalBlockData(district);
+      
+      return {
+        state: state || 'Karnataka',
+        district: district || 'Dakshina Kannada',
+        block: localBlock?.block,
+        source: 'boundary_geojson',
+        confidence: 'verified'
+      };
     }
     
+    // Check Western Ghats boundary
+    const wgCheck = this.isPointInBoundary(lat, lon, 'western_ghats');
+    if (wgCheck.inside) {
+      return {
+        state: 'Within Western Ghats',
+        source: 'boundary_geojson',
+        confidence: 'verified'
+      };
+    }
+    
+    // Point is outside all known boundaries - return null (no data available)
+    // DO NOT estimate or guess
     return null;
   }
   
   /**
-   * Get land cover data for a specific point
+   * Get local CoreStack block data for a district
+   */
+  private getLocalBlockData(district: string): { block: string; block_id?: string } | null {
+    if (!this.localCoreStackData.loaded) return null;
+    
+    const normalizedDistrict = district.toLowerCase().replace(/\s+/g, ' ').trim();
+    const match = this.localCoreStackData.blocks.find(b => 
+      b.district.toLowerCase().replace(/\s+/g, ' ').trim() === normalizedDistrict
+    );
+    
+    return match ? { block: match.block, block_id: match.block_id } : null;
+  }
+  
+  /**
+   * Get land cover data - ONLY from authentic sources
+   * 
+   * Available data:
+   * - Regional summary from Dynamic World CSV (Western Ghats wide)
+   * - Point-specific data requires GEE API (online only, not implemented)
+   * 
+   * NEVER synthesizes point-specific data from regional stats
    */
   private async getLandCoverData(_lat: number, _lon: number, _isOnline: boolean): Promise<LocationEnrichment['landCover'] | null> {
-    // First, try to get point-specific data from Dynamic World
-    // The current implementation only has regional stats, so we estimate
-    // TODO: Implement point-specific LULC query when GEE integration is available
-    
     try {
       await dynamicWorldService.loadCachedData();
       const latestStats = dynamicWorldService.getRegionalStats();
@@ -239,28 +398,37 @@ class LocationDataService {
           }
           
           return {
-            dominantClass,
-            trees: classes['Trees'],
-            crops: classes['Crops'],
-            built: classes['Built'],
-            water: classes['Water'],
-            shrubAndScrub: classes['Shrub and Scrub'],
-            grass: classes['Grass'],
-            bare: classes['Bare'],
-            year: latestStats.year,
-            source: 'estimated'  // Regional estimate, not point-specific
+            regionalSummary: {
+              dominantClass,
+              trees: classes['Trees'],
+              crops: classes['Crops'],
+              built: classes['Built'],
+              water: classes['Water'],
+              shrubAndScrub: classes['Shrub and Scrub'],
+              grass: classes['Grass'],
+              bare: classes['Bare'],
+              year: latestStats.year
+            },
+            pointDataAvailable: false,
+            source: 'dynamicworld_regional',
+            note: 'Regional average for Western Ghats. Point-specific LULC requires Google Earth Engine API integration.'
           };
         }
       }
     } catch (err) {
-      console.warn('Dynamic World data fetch failed:', err);
+      console.warn('[LocationDataService] Dynamic World data fetch failed:', err);
     }
     
-    return null;
+    return {
+      pointDataAvailable: false,
+      source: 'unavailable',
+      note: 'No LULC data available for this location'
+    };
   }
   
   /**
-   * Get watershed data from CoreStack
+   * Get watershed data from CoreStack API
+   * Local watershed data not available - requires API
    */
   private async getWatershedData(lat: number, lon: number, isOnline: boolean): Promise<LocationEnrichment['watershed'] | null> {
     if (!isOnline || !coreStackService.hasApiKey()) {
@@ -280,11 +448,11 @@ class LocationDataService {
         return {
           mwsId: mwsResult.mws_id,
           indicators: indicatorMap,
-          source: 'corestack'
+          source: 'corestack_api'
         };
       }
     } catch (err) {
-      console.warn('Watershed data fetch failed:', err);
+      console.warn('[LocationDataService] Watershed data fetch failed:', err);
     }
     
     return null;
@@ -292,6 +460,7 @@ class LocationDataService {
   
   /**
    * Get formatted data for display in UI
+   * Clearly indicates data sources and availability
    */
   formatForDisplay(enrichment: LocationEnrichment): Record<string, Record<string, string | number>> {
     const formatted: Record<string, Record<string, string | number>> = {};
@@ -302,32 +471,54 @@ class LocationDataService {
       'Queried': new Date(enrichment.timestamp).toLocaleString('en-IN')
     };
     
-    // Administrative
+    // Administrative - clearly show source
     if (enrichment.admin) {
       formatted['🏛️ Administrative'] = {};
       if (enrichment.admin.state) formatted['🏛️ Administrative']['State'] = enrichment.admin.state;
       if (enrichment.admin.district) formatted['🏛️ Administrative']['District'] = enrichment.admin.district;
       if (enrichment.admin.tehsil) formatted['🏛️ Administrative']['Tehsil'] = enrichment.admin.tehsil;
-      formatted['🏛️ Administrative']['Source'] = enrichment.admin.source;
+      if (enrichment.admin.block) formatted['🏛️ Administrative']['Block'] = enrichment.admin.block;
+      
+      // Show source clearly
+      const sourceLabel = enrichment.admin.source === 'corestack_api' ? 'CoreStack API' :
+                         enrichment.admin.source === 'boundary_geojson' ? 'Local Boundary Data' :
+                         'Local CoreStack Data';
+      formatted['🏛️ Administrative']['Source'] = sourceLabel;
+      formatted['🏛️ Administrative']['Confidence'] = enrichment.admin.confidence === 'verified' ? '✓ Verified' : '~ Approximate';
+    } else {
+      formatted['🏛️ Administrative'] = {
+        'Status': 'No data available for this location'
+      };
     }
     
-    // Land Cover
+    // Land Cover - clearly distinguish regional vs point data
     if (enrichment.landCover) {
-      formatted['🌍 Land Cover (Dynamic World)'] = {
-        'Dominant Class': enrichment.landCover.dominantClass || '-',
-        'Trees': `${(enrichment.landCover.trees || 0).toFixed(1)}%`,
-        'Crops': `${(enrichment.landCover.crops || 0).toFixed(1)}%`,
-        'Built': `${(enrichment.landCover.built || 0).toFixed(1)}%`,
-        'Shrub & Scrub': `${(enrichment.landCover.shrubAndScrub || 0).toFixed(1)}%`,
-        'Year': enrichment.landCover.year || '-',
-        'Note': enrichment.landCover.source === 'estimated' ? 'Regional average - actual may vary' : 'Point-specific data'
-      };
+      if (enrichment.landCover.regionalSummary) {
+        formatted['🌍 Land Cover (Dynamic World)'] = {
+          '⚠️ Data Type': 'REGIONAL AVERAGE (Western Ghats)',
+          'Year': enrichment.landCover.regionalSummary.year,
+          '🌳 Trees': `${enrichment.landCover.regionalSummary.trees.toFixed(1)}%`,
+          '🌾 Crops': `${enrichment.landCover.regionalSummary.crops.toFixed(1)}%`,
+          '🏘️ Built': `${enrichment.landCover.regionalSummary.built.toFixed(1)}%`,
+          '🌿 Shrub & Scrub': `${enrichment.landCover.regionalSummary.shrubAndScrub.toFixed(1)}%`,
+          '💧 Water': `${enrichment.landCover.regionalSummary.water.toFixed(1)}%`,
+          '🌱 Grass': `${enrichment.landCover.regionalSummary.grass.toFixed(1)}%`
+        };
+        if (enrichment.landCover.note) {
+          formatted['🌍 Land Cover (Dynamic World)']['ℹ️ Note'] = enrichment.landCover.note;
+        }
+      } else if (enrichment.landCover.note) {
+        formatted['🌍 Land Cover (Dynamic World)'] = {
+          'Status': enrichment.landCover.note
+        };
+      }
     }
     
     // Watershed
     if (enrichment.watershed) {
       formatted['💧 Watershed (CoreStack)'] = {
-        'MWS ID': enrichment.watershed.mwsId || '-'
+        'MWS ID': enrichment.watershed.mwsId || '-',
+        'Source': 'CoreStack API'
       };
       if (enrichment.watershed.indicators) {
         for (const [key, value] of Object.entries(enrichment.watershed.indicators)) {
@@ -343,8 +534,17 @@ class LocationDataService {
         'Humidity': `${enrichment.weather.current.humidity}%`,
         'Conditions': enrichment.weather.current.weatherDescription,
         'Wind': `${enrichment.weather.current.windSpeed} km/h`,
-        'Precipitation': `${enrichment.weather.current.precipitation} mm`
+        'Precipitation': `${enrichment.weather.current.precipitation} mm`,
+        'Source': 'Open-Meteo API'
       };
+    }
+    
+    // Warnings
+    if (enrichment.warnings && enrichment.warnings.length > 0) {
+      formatted['⚠️ Warnings'] = {};
+      enrichment.warnings.forEach((w, i) => {
+        formatted['⚠️ Warnings'][`Warning ${i + 1}`] = w;
+      });
     }
     
     return formatted;

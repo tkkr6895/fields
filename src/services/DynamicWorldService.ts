@@ -43,13 +43,7 @@ export interface DynamicWorldPointData {
 
 class DynamicWorldService {
   private cachedData: DynamicWorldData[] = [];
-  private isOnline: boolean = navigator.onLine;
   private dataLoaded: boolean = false;
-
-  constructor() {
-    window.addEventListener('online', () => this.isOnline = true);
-    window.addEventListener('offline', () => this.isOnline = false);
-  }
 
   /**
    * Load cached Dynamic World data from local files
@@ -151,55 +145,42 @@ class DynamicWorldService {
   }
 
   /**
-   * Fetch Dynamic World data for a specific point (requires online + GEE setup)
-   * This is a placeholder for future GEE API integration
+   * Fetch Dynamic World data for a specific point
+   * 
+   * IMPORTANT: Point-specific LULC data requires Google Earth Engine API integration.
+   * This is NOT available offline and requires a backend proxy.
+   * 
+   * This method returns NULL - it does NOT synthesize or estimate point data
+   * from regional statistics. That would be inaccurate and misleading.
+   * 
+   * For regional statistics, use getRegionalStats() instead.
    */
-  async fetchPointData(lat: number, lon: number, date?: string): Promise<DynamicWorldPointData | null> {
-    if (!this.isOnline) {
-      console.warn('Cannot fetch Dynamic World point data: offline');
-      return null;
+  async fetchPointData(_lat: number, _lon: number, _date?: string): Promise<DynamicWorldPointData | null> {
+    // Point-specific LULC data is NOT available without GEE API integration
+    // DO NOT return synthetic/estimated data based on regional stats
+    // This was the source of the "fake data" problem
+    
+    console.warn('[DynamicWorld] Point-specific LULC data not available. Requires Google Earth Engine API integration.');
+    return null;
+  }
+
+  /**
+   * Check if point-specific data is available
+   * Currently always returns false as GEE integration is not implemented
+   */
+  isPointDataAvailable(): boolean {
+    return false;
+  }
+
+  /**
+   * Get a clear message about data availability
+   */
+  getDataAvailabilityMessage(): string {
+    if (this.dataLoaded && this.cachedData.length > 0) {
+      const years = this.getAvailableYears();
+      return `Regional LULC data available for Western Ghats (${years[0]}-${years[years.length - 1]}). Point-specific data requires GEE API integration.`;
     }
-
-    // NOTE: This would require a backend proxy to GEE or use of GEE's REST API
-    // For now, we return estimated data based on regional statistics
-    const latestStats = this.getRegionalStats();
-    if (!latestStats) return null;
-
-    // Calculate dominant class from regional stats
-    const classes = {
-      'Water': latestStats.water,
-      'Trees': latestStats.trees,
-      'Grass': latestStats.grass,
-      'Flooded Vegetation': latestStats.floodedVegetation,
-      'Crops': latestStats.crops,
-      'Shrub and Scrub': latestStats.shrubAndScrub,
-      'Built': latestStats.built,
-      'Bare': latestStats.bare,
-      'Snow and Ice': latestStats.snowAndIce
-    };
-
-    const total = Object.values(classes).reduce((a, b) => a + b, 0);
-    const probabilities: Record<string, number> = {};
-    let dominantClass = 'Trees';
-    let maxProb = 0;
-
-    for (const [cls, area] of Object.entries(classes)) {
-      const prob = area / total;
-      probabilities[cls] = prob;
-      if (prob > maxProb) {
-        maxProb = prob;
-        dominantClass = cls;
-      }
-    }
-
-    return {
-      lat,
-      lon,
-      timestamp: date || new Date().toISOString(),
-      landCoverClass: dominantClass,
-      confidence: maxProb,
-      probabilities
-    };
+    return 'No Dynamic World data available. Load regional data first.';
   }
 
   /**

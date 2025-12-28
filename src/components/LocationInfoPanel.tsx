@@ -62,7 +62,7 @@ const LocationInfoPanel: React.FC<LocationInfoPanelProps> = ({ location, isOnlin
         }));
       }
 
-      // 2. Fetch Dynamic World (local cached + online if available)
+      // 2. Fetch Dynamic World (local cached - regional data only)
       try {
         await dynamicWorldService.loadCachedData();
         const latestYear = new Date().getFullYear();
@@ -87,7 +87,8 @@ const LocationInfoPanel: React.FC<LocationInfoPanelProps> = ({ location, isOnlin
               ...prev.dynamicWorld, 
               status: 'loaded', 
               data: {
-                '⚠️ Note': 'Regional average (WG)',
+                '📊 Data Type': 'REGIONAL AVERAGE',
+                'ℹ️ Coverage': 'Western Ghats Region',
                 'Year': dwStats.year,
                 '🌳 Trees': `${treesPct}%`,
                 '🌾 Crops': `${cropsPct}%`,
@@ -95,6 +96,7 @@ const LocationInfoPanel: React.FC<LocationInfoPanelProps> = ({ location, isOnlin
                 '🌿 Shrub & Scrub': `${shrubPct}%`,
                 '💧 Water': `${waterPct}%`,
                 '🌱 Grass': `${grassPct}%`,
+                '⚠️ Note': 'Point-specific LULC requires GEE API'
               }
             }
           }));

@@ -82,6 +82,15 @@ export interface ObservationContext {
   areaMode: 'point' | 'buffer' | 'watershed';
   bufferM?: number;
   watershedId?: string;
+  // Authentic admin data from boundary GeoJSON or CoreStack API
+  adminData?: {
+    state?: string;
+    district?: string;
+    tehsil?: string;
+    block?: string;
+    source?: 'boundary_geojson' | 'corestack_api' | 'corestack_local';
+    confidence?: 'verified' | 'approximate';
+  };
 }
 
 export type ValidationStatus = 'match' | 'mismatch' | 'unclear';

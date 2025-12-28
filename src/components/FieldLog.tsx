@@ -134,7 +134,7 @@ const FieldLog: React.FC<FieldLogProps> = ({ onGoToLocation }) => {
       try {
         const enrichedData: Record<string, unknown> = { ...obs.datasetValues };
 
-        // Fetch weather data
+        // Fetch weather data (authentic - from Open-Meteo API)
         try {
           setSyncProgress(prev => ({ ...prev, message: `[${i + 1}/${observations.length}] Fetching weather...` }));
           const weatherData = await weatherService.getWeather(lat, lon);
@@ -143,27 +143,34 @@ const FieldLog: React.FC<FieldLogProps> = ({ onGoToLocation }) => {
             enrichedData['weather_humidity'] = weatherData.current.humidity;
             enrichedData['weather_description'] = weatherData.current.weatherDescription;
             enrichedData['weather_precip'] = weatherData.current.precipitation;
+            enrichedData['weather_source'] = 'Open-Meteo API';
+            enrichedData['weather_timestamp'] = new Date().toISOString();
           }
         } catch (e) {
           console.warn('Weather fetch failed:', e);
         }
 
-        // Fetch Dynamic World land cover
+        // Dynamic World LULC - only regional data available
+        // Point-specific data requires GEE API integration
         try {
           setSyncProgress(prev => ({ ...prev, message: `[${i + 1}/${observations.length}] Fetching land cover...` }));
-          const dwData = await dynamicWorldService.fetchPointData(lat, lon);
-          if (dwData) {
-            enrichedData['dw_landcover'] = dwData.landCoverClass;
-            enrichedData['dw_confidence'] = dwData.confidence;
-            enrichedData['dw_trees'] = dwData.probabilities.trees;
-            enrichedData['dw_crops'] = dwData.probabilities.crops;
-            enrichedData['dw_built'] = dwData.probabilities.built;
+          // Note: Point data is NOT available - fetchPointData returns null
+          // We can only provide regional statistics
+          const regionalStats = dynamicWorldService.getRegionalStats();
+          if (regionalStats) {
+            enrichedData['dw_data_type'] = 'REGIONAL_AVERAGE';
+            enrichedData['dw_region'] = 'Western Ghats';
+            enrichedData['dw_year'] = regionalStats.year;
+            enrichedData['dw_trees_regional_pct'] = regionalStats.trees;
+            enrichedData['dw_crops_regional_pct'] = regionalStats.crops;
+            enrichedData['dw_built_regional_pct'] = regionalStats.built;
+            enrichedData['dw_note'] = 'Regional average - point-specific data requires GEE API integration';
           }
         } catch (e) {
           console.warn('Dynamic World fetch failed:', e);
         }
 
-        // Fetch CoreStack data if available
+        // Fetch CoreStack data if available (authentic - from CoreStack API)
         try {
           if (coreStackService.isAvailable()) {
             setSyncProgress(prev => ({ ...prev, message: `[${i + 1}/${observations.length}] Fetching CoreStack...` }));
@@ -173,6 +180,7 @@ const FieldLog: React.FC<FieldLogProps> = ({ onGoToLocation }) => {
               enrichedData['corestack_district'] = coreData.admin.district_name;
               enrichedData['corestack_tehsil'] = coreData.admin.tehsil_name;
               enrichedData['corestack_mws_id'] = coreData.mwsId;
+              enrichedData['corestack_source'] = 'CoreStack API';
             }
             if (coreData && coreData.indicators) {
               coreData.indicators.forEach(ind => {
@@ -183,6 +191,10 @@ const FieldLog: React.FC<FieldLogProps> = ({ onGoToLocation }) => {
         } catch (e) {
           console.warn('CoreStack fetch failed:', e);
         }
+
+        // Record sync metadata
+        enrichedData['sync_timestamp'] = new Date().toISOString();
+        enrichedData['sync_status'] = 'enriched';
 
         // Update observation in database with enriched data
         // Store enriched data in a sync_data layer

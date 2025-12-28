@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { imageService } from '../services/ImageService';
 import { GeoLocationService } from '../services/GeoLocationService';
+import { locationDataService, LocationEnrichment } from '../services/LocationDataService';
 import type { LocationData, Observation, ValidationStatus, DatasetValues, ImageData } from '../types';
 
 interface CaptureModalProps {
@@ -27,6 +28,7 @@ const CaptureModal: React.FC<CaptureModalProps> = ({
   const [loading, setLoading] = useState(false);
   const [gettingLocation, setGettingLocation] = useState(false);
   const [locationSource, setLocationSource] = useState<'gps' | 'exif' | 'device' | null>(null);
+  const [adminData, setAdminData] = useState<LocationEnrichment['admin'] | null>(null);
 
   // Get current location if not provided
   useEffect(() => {
@@ -46,11 +48,21 @@ const CaptureModal: React.FC<CaptureModalProps> = ({
     }
   }, [location, locationSource]);
 
-  // Fetch dataset values when location changes
+  // Fetch dataset values and admin data when location changes
   useEffect(() => {
     if (location) {
+      // Fetch dataset values
       getDatasetValues(location.lat, location.lon)
         .then(setDatasetValues)
+        .catch(console.error);
+      
+      // Fetch admin data from authentic sources
+      locationDataService.enrichLocation(location.lat, location.lon, navigator.onLine)
+        .then(enrichment => {
+          if (enrichment.admin) {
+            setAdminData(enrichment.admin);
+          }
+        })
         .catch(console.error);
     }
   }, [location, getDatasetValues]);
@@ -135,13 +147,31 @@ const CaptureModal: React.FC<CaptureModalProps> = ({
   const handleSubmit = useCallback(() => {
     if (!validation || !location) return;
 
+    // Build region string from authentic admin data
+    let regionString = 'Unknown Location';
+    if (adminData) {
+      const parts: string[] = [];
+      if (adminData.district) parts.push(adminData.district);
+      if (adminData.state) parts.push(adminData.state);
+      regionString = parts.length > 0 ? parts.join(', ') : 'Western Ghats';
+    }
+
     const observation: Observation = {
       id: uuidv4(),
       timestamp: new Date().toISOString(),
       location: location,
       context: {
-        region: 'Western Ghats',
-        areaMode: 'point'
+        region: regionString,
+        areaMode: 'point',
+        // Store full admin details for reference
+        adminData: adminData ? {
+          state: adminData.state,
+          district: adminData.district,
+          tehsil: adminData.tehsil,
+          block: adminData.block,
+          source: adminData.source,
+          confidence: adminData.confidence
+        } : undefined
       },
       datasetValues: datasetValues,
       image: imageData || undefined,
@@ -151,7 +181,7 @@ const CaptureModal: React.FC<CaptureModalProps> = ({
     };
 
     onCapture(observation);
-  }, [validation, location, datasetValues, imageData, notes, onCapture]);
+  }, [validation, location, datasetValues, imageData, notes, onCapture, adminData]);
 
   return (
     <div className="capture-modal">

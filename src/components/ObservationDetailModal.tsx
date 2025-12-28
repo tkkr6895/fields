@@ -262,8 +262,24 @@ export const ObservationDetailModal: React.FC<ObservationDetailModalProps> = ({
                         {enrichment.admin.state && <div className="data-row"><span>State</span><span>{enrichment.admin.state}</span></div>}
                         {enrichment.admin.district && <div className="data-row"><span>District</span><span>{enrichment.admin.district}</span></div>}
                         {enrichment.admin.tehsil && <div className="data-row"><span>Tehsil</span><span>{enrichment.admin.tehsil}</span></div>}
-                        <div className="data-row source"><span>Source</span><span>{enrichment.admin.source}</span></div>
+                        {enrichment.admin.block && <div className="data-row"><span>Block</span><span>{enrichment.admin.block}</span></div>}
+                        <div className="data-row source">
+                          <span>Source</span>
+                          <span>{enrichment.admin.source === 'corestack_api' ? 'CoreStack API' : 
+                                 enrichment.admin.source === 'boundary_geojson' ? 'Local Boundary Data' : 'Local Data'}</span>
+                        </div>
+                        <div className="data-row source">
+                          <span>Confidence</span>
+                          <span>{enrichment.admin.confidence === 'verified' ? '✓ Verified' : '~ Approximate'}</span>
+                        </div>
                       </div>
+                    </div>
+                  )}
+
+                  {!enrichment.admin && (
+                    <div className="obs-section">
+                      <h4>🏛️ Administrative</h4>
+                      <p className="no-data">No admin data available for this location</p>
                     </div>
                   )}
 
@@ -271,66 +287,65 @@ export const ObservationDetailModal: React.FC<ObservationDetailModalProps> = ({
                   {enrichment.landCover && (
                     <div className="obs-section">
                       <h4>🌍 Land Cover (Dynamic World)</h4>
-                      <div className="land-cover-grid">
-                        <div className="dominant-class">
-                          <span className="lc-label">Dominant</span>
-                          <span className="lc-value">{enrichment.landCover.dominantClass}</span>
-                        </div>
-                        <div className="lc-bars">
-                          {enrichment.landCover.trees !== undefined && (
+                      {enrichment.landCover.regionalSummary ? (
+                        <div className="land-cover-grid">
+                          <div className="data-type-badge">
+                            📊 REGIONAL AVERAGE - Western Ghats
+                          </div>
+                          <div className="dominant-class">
+                            <span className="lc-label">Dominant</span>
+                            <span className="lc-value">{enrichment.landCover.regionalSummary.dominantClass}</span>
+                          </div>
+                          <div className="lc-bars">
                             <div className="lc-bar-row">
                               <span>🌳 Trees</span>
                               <div className="lc-bar-bg">
-                                <div className="lc-bar trees" style={{width: `${enrichment.landCover.trees}%`}}></div>
+                                <div className="lc-bar trees" style={{width: `${enrichment.landCover.regionalSummary.trees}%`}}></div>
                               </div>
-                              <span>{enrichment.landCover.trees.toFixed(1)}%</span>
+                              <span>{enrichment.landCover.regionalSummary.trees.toFixed(1)}%</span>
                             </div>
-                          )}
-                          {enrichment.landCover.crops !== undefined && (
                             <div className="lc-bar-row">
                               <span>🌾 Crops</span>
                               <div className="lc-bar-bg">
-                                <div className="lc-bar crops" style={{width: `${enrichment.landCover.crops}%`}}></div>
+                                <div className="lc-bar crops" style={{width: `${enrichment.landCover.regionalSummary.crops}%`}}></div>
                               </div>
-                              <span>{enrichment.landCover.crops.toFixed(1)}%</span>
+                              <span>{enrichment.landCover.regionalSummary.crops.toFixed(1)}%</span>
                             </div>
-                          )}
-                          {enrichment.landCover.built !== undefined && (
                             <div className="lc-bar-row">
                               <span>🏘️ Built</span>
                               <div className="lc-bar-bg">
-                                <div className="lc-bar built" style={{width: `${enrichment.landCover.built}%`}}></div>
+                                <div className="lc-bar built" style={{width: `${enrichment.landCover.regionalSummary.built}%`}}></div>
                               </div>
-                              <span>{enrichment.landCover.built.toFixed(1)}%</span>
+                              <span>{enrichment.landCover.regionalSummary.built.toFixed(1)}%</span>
                             </div>
-                          )}
-                          {enrichment.landCover.shrubAndScrub !== undefined && (
                             <div className="lc-bar-row">
                               <span>🌿 Shrub</span>
                               <div className="lc-bar-bg">
-                                <div className="lc-bar shrub" style={{width: `${enrichment.landCover.shrubAndScrub}%`}}></div>
+                                <div className="lc-bar shrub" style={{width: `${enrichment.landCover.regionalSummary.shrubAndScrub}%`}}></div>
                               </div>
-                              <span>{enrichment.landCover.shrubAndScrub.toFixed(1)}%</span>
+                              <span>{enrichment.landCover.regionalSummary.shrubAndScrub.toFixed(1)}%</span>
                             </div>
-                          )}
-                          {enrichment.landCover.grass !== undefined && (
                             <div className="lc-bar-row">
                               <span>🌱 Grass</span>
                               <div className="lc-bar-bg">
-                                <div className="lc-bar grass" style={{width: `${enrichment.landCover.grass}%`}}></div>
+                                <div className="lc-bar grass" style={{width: `${enrichment.landCover.regionalSummary.grass}%`}}></div>
                               </div>
-                              <span>{enrichment.landCover.grass.toFixed(1)}%</span>
+                              <span>{enrichment.landCover.regionalSummary.grass.toFixed(1)}%</span>
                             </div>
+                          </div>
+                          <div className="data-row source">
+                            <span>Year</span>
+                            <span>{enrichment.landCover.regionalSummary.year}</span>
+                          </div>
+                          {enrichment.landCover.note && (
+                            <p className="source-note">ℹ️ {enrichment.landCover.note}</p>
                           )}
                         </div>
-                        <div className="data-row source">
-                          <span>Source</span>
-                          <span>{enrichment.landCover.source} ({enrichment.landCover.year})</span>
+                      ) : (
+                        <div className="no-data">
+                          <p>{enrichment.landCover.note || 'No LULC data available'}</p>
                         </div>
-                        {enrichment.landCover.source === 'estimated' && (
-                          <p className="source-note">⚠️ Regional average - actual land cover may vary at this location</p>
-                        )}
-                      </div>
+                      )}
                     </div>
                   )}
 

@@ -256,7 +256,22 @@ const LocationInfoPanel: React.FC<LocationInfoPanelProps> = ({ location, isOnlin
     if (typeof value === 'number') {
       return Number.isInteger(value) ? value.toString() : value.toFixed(2);
     }
-    if (typeof value === 'object') return JSON.stringify(value);
+    if (Array.isArray(value)) {
+      return value.map(v => formatValue(v)).join(', ');
+    }
+    if (typeof value === 'object') {
+      // For nested objects, try to extract meaningful values
+      const obj = value as Record<string, unknown>;
+      const keys = Object.keys(obj);
+      if (keys.length === 1) {
+        return formatValue(obj[keys[0]]);
+      }
+      if (keys.length <= 3) {
+        return keys.map(k => `${k}: ${formatValue(obj[k])}`).join(', ');
+      }
+      // For larger objects, show count
+      return `${keys.length} items`;
+    }
     return String(value);
   };
 

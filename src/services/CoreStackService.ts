@@ -70,9 +70,12 @@ class CoreStackService {
   private apiKey: string | null = null;
   private isOnline: boolean = navigator.onLine;
 
+  // Hardcoded API key for testing - move to environment variable for production
+  private static readonly DEFAULT_API_KEY = 'x0bXxURa.B9Qgfxd0aKxxJ8GIDHA5FCSIAc52hFgg';
+
   constructor() {
-    // Load API key from localStorage if available
-    this.apiKey = localStorage.getItem('corestack_api_key');
+    // Load API key from localStorage, fallback to hardcoded key for testing
+    this.apiKey = localStorage.getItem('corestack_api_key') || CoreStackService.DEFAULT_API_KEY;
     
     window.addEventListener('online', () => this.isOnline = true);
     window.addEventListener('offline', () => this.isOnline = false);

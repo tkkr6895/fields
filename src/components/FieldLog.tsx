@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { db, exportToGeoJSON, exportToCSV } from '../db/database';
+import { db, dbReady, exportToGeoJSON, exportToCSV } from '../db/database';
 import { imageService } from '../services/ImageService';
 import { weatherService } from '../services/WeatherService';
 import { dynamicWorldService } from '../services/DynamicWorldService';
@@ -21,6 +21,7 @@ interface SyncProgress {
 const FieldLog: React.FC<FieldLogProps> = ({ onGoToLocation }) => {
   const [filter, setFilter] = useState<ValidationStatus | 'all'>('all');
   const [imageUrls, setImageUrls] = useState<Record<string, string>>({});
+  const [dbError, setDbError] = useState<string | null>(null);
   const [syncProgress, setSyncProgress] = useState<SyncProgress>({
     current: 0,
     total: 0,
@@ -28,8 +29,21 @@ const FieldLog: React.FC<FieldLogProps> = ({ onGoToLocation }) => {
     message: ''
   });
 
+  // Check database availability
+  useEffect(() => {
+    dbReady.then((ready) => {
+      if (!ready) {
+        setDbError('Database unavailable. Try clearing browser data or using incognito mode.');
+      }
+    });
+  }, []);
+
   // Live query observations
   const observations = useLiveQuery(async () => {
+    // Wait for DB to be ready
+    const ready = await dbReady;
+    if (!ready) return [];
+    
     let query = db.observations.orderBy('timestamp').reverse();
     
     if (filter !== 'all') {
@@ -223,6 +237,21 @@ const FieldLog: React.FC<FieldLogProps> = ({ onGoToLocation }) => {
 
   return (
     <div className="field-log">
+      {/* Database Error */}
+      {dbError && (
+        <div className="db-error-banner" style={{ 
+          background: '#ff6b6b22', 
+          border: '1px solid #ff6b6b', 
+          borderRadius: '8px', 
+          padding: '12px', 
+          margin: '8px',
+          color: '#ff6b6b',
+          fontSize: '13px'
+        }}>
+          ⚠️ {dbError}
+        </div>
+      )}
+
       {/* Filters */}
       <div className="field-log-filters">
         <button

@@ -20,6 +20,7 @@ class FieldValidatorDB extends Dexie {
   datasets!: Table<CachedDataset>;
   private _isOpen = false;
   private _openError: Error | null = null;
+  private _initPromise: Promise<boolean> | null = null;
 
   constructor() {
     super('WGFieldValidator');
@@ -29,21 +30,40 @@ class FieldValidatorDB extends Dexie {
       images: 'id, createdAt',
       datasets: 'id, layerId, updatedAt'
     });
+    
+    // Auto-initialize
+    this._initPromise = this.initDatabase();
   }
 
-  async ensureOpen(): Promise<boolean> {
-    if (this._isOpen) return true;
-    if (this._openError) return false;
-    
+  private async initDatabase(): Promise<boolean> {
     try {
       await this.open();
       this._isOpen = true;
+      console.log('Database opened successfully');
       return true;
     } catch (error) {
-      console.warn('IndexedDB initialization failed:', error);
-      this._openError = error as Error;
-      return false;
+      console.warn('IndexedDB failed to open, attempting recovery:', error);
+      
+      // Try to delete and recreate the database
+      try {
+        await this.delete();
+        await this.open();
+        this._isOpen = true;
+        console.log('Database recovered successfully');
+        return true;
+      } catch (retryError) {
+        console.error('Database recovery failed:', retryError);
+        this._openError = retryError as Error;
+        return false;
+      }
     }
+  }
+
+  async ensureOpen(): Promise<boolean> {
+    if (this._initPromise) {
+      return this._initPromise;
+    }
+    return this._isOpen && !this._openError;
   }
 
   get isAvailable(): boolean {
@@ -53,10 +73,8 @@ class FieldValidatorDB extends Dexie {
 
 export const db = new FieldValidatorDB();
 
-// Initialize database on load - don't block, just log errors
-db.ensureOpen().catch(err => {
-  console.warn('Database initialization warning:', err);
-});
+// Export a promise that resolves when DB is ready
+export const dbReady = db.ensureOpen();
 
 // Helper functions with fallback for IndexedDB unavailability
 export async function saveObservation(observation: Observation): Promise<string> {

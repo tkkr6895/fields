@@ -1,0 +1,27 @@
+{
+  "name": "WG Field Validator",
+  "short_name": "WG Validator",
+  "description": "Offline-first field validation for Western Ghats LULC datasets",
+  "theme_color": "#1a1a2e",
+  "background_color": "#0f0f1a",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "scope": "/",
+  "start_url": "/",
+  "icons": [
+    {
+      "src": "/pwa-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/pwa-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["utilities", "productivity"],
+  "screenshots": []
+}

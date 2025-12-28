@@ -261,48 +261,65 @@ export class GazetteerService {
 
   /**
    * Search online using Nominatim (OpenStreetMap)
+   * Note: Nominatim may block browser requests due to CORS/rate limiting
+   * This is a best-effort feature that gracefully falls back to local results
    */
   private async searchOnline(query: string, limit: number): Promise<PlaceResult[]> {
-    const url = new URL('https://nominatim.openstreetmap.org/search');
-    url.searchParams.set('q', `${query}, Karnataka, India`);
-    url.searchParams.set('format', 'json');
-    url.searchParams.set('limit', String(limit));
-    url.searchParams.set('addressdetails', '1');
+    try {
+      const url = new URL('https://nominatim.openstreetmap.org/search');
+      url.searchParams.set('q', `${query}, Karnataka, India`);
+      url.searchParams.set('format', 'json');
+      url.searchParams.set('limit', String(limit));
+      url.searchParams.set('addressdetails', '1');
 
-    const response = await fetch(url.toString(), {
-      headers: {
-        'Accept': 'application/json',
-        'User-Agent': 'WGFieldValidator/1.0'
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+
+      const response = await fetch(url.toString(), {
+        signal: controller.signal,
+        headers: {
+          'Accept': 'application/json',
+          // Note: User-Agent header may not be sent by browsers due to CORS restrictions
+        }
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        console.warn('Nominatim search returned:', response.status);
+        return []; // Return empty, caller will use local results
       }
-    });
 
-    if (!response.ok) throw new Error('Search failed');
-
-    const data = await response.json();
+      const data = await response.json();
     
-    return data.map((item: {
-      place_id: string;
-      display_name: string;
-      lat: string;
-      lon: string;
-      type: string;
-      importance: number;
-      address?: {
-        state?: string;
-        county?: string;
-        state_district?: string;
-      };
-    }) => ({
-      id: `osm_${item.place_id}`,
-      name: item.display_name.split(',')[0],
-      displayName: item.display_name,
-      type: this.mapOsmType(item.type),
-      lat: parseFloat(item.lat),
-      lon: parseFloat(item.lon),
-      state: item.address?.state,
-      district: item.address?.county || item.address?.state_district,
-      importance: item.importance
-    }));
+      return data.map((item: {
+        place_id: string;
+        display_name: string;
+        lat: string;
+        lon: string;
+        type: string;
+        importance: number;
+        address?: {
+          state?: string;
+          county?: string;
+          state_district?: string;
+        };
+      }) => ({
+        id: `osm_${item.place_id}`,
+        name: item.display_name.split(',')[0],
+        displayName: item.display_name,
+        type: this.mapOsmType(item.type),
+        lat: parseFloat(item.lat),
+        lon: parseFloat(item.lon),
+        state: item.address?.state,
+        district: item.address?.county || item.address?.state_district,
+        importance: item.importance
+      }));
+    } catch (error) {
+      // Silently fail - online search is a best-effort enhancement
+      console.warn('Online search unavailable:', error instanceof Error ? error.message : 'unknown error');
+      return [];
+    }
   }
 
   private mapOsmType(osmType: string): PlaceResult['type'] {

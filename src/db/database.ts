@@ -18,6 +18,8 @@ class FieldValidatorDB extends Dexie {
   observations!: Table<Observation>;
   images!: Table<ImageBlob>;
   datasets!: Table<CachedDataset>;
+  private _isOpen = false;
+  private _openError: Error | null = null;
 
   constructor() {
     super('WGFieldValidator');
@@ -28,12 +30,40 @@ class FieldValidatorDB extends Dexie {
       datasets: 'id, layerId, updatedAt'
     });
   }
+
+  async ensureOpen(): Promise<boolean> {
+    if (this._isOpen) return true;
+    if (this._openError) return false;
+    
+    try {
+      await this.open();
+      this._isOpen = true;
+      return true;
+    } catch (error) {
+      console.warn('IndexedDB initialization failed:', error);
+      this._openError = error as Error;
+      return false;
+    }
+  }
+
+  get isAvailable(): boolean {
+    return this._isOpen && !this._openError;
+  }
 }
 
 export const db = new FieldValidatorDB();
 
-// Helper functions
+// Initialize database on load - don't block, just log errors
+db.ensureOpen().catch(err => {
+  console.warn('Database initialization warning:', err);
+});
+
+// Helper functions with fallback for IndexedDB unavailability
 export async function saveObservation(observation: Observation): Promise<string> {
+  if (!await db.ensureOpen()) {
+    console.warn('Database unavailable, observation saved to session only');
+    return observation.id;
+  }
   await db.observations.add(observation);
   return observation.id;
 }
@@ -42,6 +72,10 @@ export async function getObservations(filter?: {
   validation?: string;
   limit?: number;
 }): Promise<Observation[]> {
+  if (!await db.ensureOpen()) {
+    return [];
+  }
+  
   let query = db.observations.orderBy('timestamp').reverse();
   
   if (filter?.validation && filter.validation !== 'all') {
@@ -59,10 +93,12 @@ export async function getObservations(filter?: {
 }
 
 export async function getObservationById(id: string): Promise<Observation | undefined> {
+  if (!await db.ensureOpen()) return undefined;
   return await db.observations.get(id);
 }
 
 export async function deleteObservation(id: string): Promise<void> {
+  if (!await db.ensureOpen()) return;
   const obs = await db.observations.get(id);
   if (obs?.image?.blobId) {
     await db.images.delete(obs.image.blobId);
@@ -71,6 +107,7 @@ export async function deleteObservation(id: string): Promise<void> {
 }
 
 export async function saveImage(id: string, blob: Blob): Promise<void> {
+  if (!await db.ensureOpen()) return;
   await db.images.put({
     id,
     blob,
@@ -79,11 +116,13 @@ export async function saveImage(id: string, blob: Blob): Promise<void> {
 }
 
 export async function getImage(id: string): Promise<Blob | undefined> {
+  if (!await db.ensureOpen()) return undefined;
   const record = await db.images.get(id);
   return record?.blob;
 }
 
 export async function cacheDataset(layerId: string, data: unknown): Promise<void> {
+  if (!await db.ensureOpen()) return;
   await db.datasets.put({
     id: layerId,
     layerId,
@@ -93,6 +132,7 @@ export async function cacheDataset(layerId: string, data: unknown): Promise<void
 }
 
 export async function getCachedDataset(layerId: string): Promise<unknown | undefined> {
+  if (!await db.ensureOpen()) return undefined;
   const record = await db.datasets.get(layerId);
   return record?.data;
 }

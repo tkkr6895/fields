@@ -86,7 +86,7 @@ export class ImageService {
     }
   }
 
-  async generateThumbnail(file: File | Blob, maxSize: number = 200): Promise<string> {
+  async generateThumbnail(file: File | Blob, maxSize: number = 800): Promise<string> {
     return new Promise((resolve, reject) => {
       const img = new Image();
       const url = URL.createObjectURL(file);
@@ -123,7 +123,7 @@ export class ImageService {
 
         ctx.drawImage(img, 0, 0, width, height);
 
-        resolve(canvas.toDataURL('image/jpeg', 0.7));
+        resolve(canvas.toDataURL('image/jpeg', 0.9));
       };
 
       img.onerror = () => {

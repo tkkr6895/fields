@@ -120,20 +120,30 @@ class CoreStackService {
       url.searchParams.set(key, value);
     });
 
-    const response = await fetch(url.toString(), {
-      method: 'GET',
-      headers: {
-        'Accept': 'application/json',
-        'X-API-Key': this.apiKey
+    console.log(`[CoreStack] Requesting: ${endpoint}`, params);
+
+    try {
+      const response = await fetch(url.toString(), {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json',
+          'X-API-Key': this.apiKey
+        }
+      });
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({ message: response.statusText }));
+        console.error(`[CoreStack] Error ${response.status}:`, error);
+        throw new Error(error.message || error.detail || `API error: ${response.status}`);
       }
-    });
 
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({ message: response.statusText }));
-      throw new Error(error.message || `API error: ${response.status}`);
+      const data = await response.json();
+      console.log(`[CoreStack] Response from ${endpoint}:`, data);
+      return data;
+    } catch (err) {
+      console.error(`[CoreStack] Request failed:`, err);
+      throw err;
     }
-
-    return response.json();
   }
 
   /**

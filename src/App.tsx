@@ -347,6 +347,7 @@ function App() {
       
       {showLocationInfo && searchedLocation && (
         <LocationInfoPanel
+          key={`${searchedLocation.lat}-${searchedLocation.lon}`}
           location={searchedLocation}
           isOnline={isOnline}
           onClose={() => setShowLocationInfo(false)}

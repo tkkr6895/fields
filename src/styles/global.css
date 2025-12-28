@@ -545,6 +545,7 @@ html, body, #root {
   flex: 1;
   overflow-y: auto;
   padding: 16px 20px;
+  padding-bottom: calc(80px + env(safe-area-inset-bottom, 20px));
 }
 
 /* Photo Preview */

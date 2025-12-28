@@ -30,6 +30,17 @@ const LocationInfoPanel: React.FC<LocationInfoPanelProps> = ({ location, isOnlin
   const [weatherData, setWeatherData] = useState<WeatherData | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(new Set(['local']));
 
+  // Reset sections when location changes
+  useEffect(() => {
+    setSections({
+      local: { title: 'Local Data', icon: '💾', status: 'loading', data: null },
+      dynamicWorld: { title: 'Dynamic World (LULC)', icon: '🌍', status: 'loading', data: null },
+      corestack: { title: 'CoreStack (Watershed)', icon: '💧', status: 'loading', data: null },
+      weather: { title: 'Weather', icon: '🌤️', status: 'loading', data: null },
+    });
+    setWeatherData(null);
+  }, [location.lat, location.lon]);
+
   useEffect(() => {
     const fetchAllData = async () => {
       // 1. Fetch local data (always available)
@@ -253,24 +264,46 @@ const LocationInfoPanel: React.FC<LocationInfoPanelProps> = ({ location, isOnlin
 
   const formatValue = (value: unknown): string => {
     if (value === null || value === undefined) return '-';
+    if (typeof value === 'boolean') return value ? 'Yes' : 'No';
     if (typeof value === 'number') {
+      if (Number.isNaN(value)) return '-';
+      // Format percentages if value ends in _pct or is a percentage string
+      if (value >= 0 && value <= 100) {
+        return Number.isInteger(value) ? value.toString() : value.toFixed(1);
+      }
+      // Large numbers: add thousand separators
+      if (Math.abs(value) >= 1000) {
+        return value.toLocaleString('en-IN', { maximumFractionDigits: 2 });
+      }
       return Number.isInteger(value) ? value.toString() : value.toFixed(2);
     }
+    if (typeof value === 'string') {
+      // Handle empty strings
+      if (value.trim() === '') return '-';
+      // Capitalize first letter and replace underscores
+      return value.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+    }
     if (Array.isArray(value)) {
-      return value.map(v => formatValue(v)).join(', ');
+      if (value.length === 0) return '-';
+      if (value.length <= 3) {
+        return value.map(v => formatValue(v)).join(', ');
+      }
+      return `${value.slice(0, 3).map(v => formatValue(v)).join(', ')} (+${value.length - 3} more)`;
     }
     if (typeof value === 'object') {
-      // For nested objects, try to extract meaningful values
       const obj = value as Record<string, unknown>;
-      const keys = Object.keys(obj);
+      const keys = Object.keys(obj).filter(k => !k.startsWith('_'));
+      if (keys.length === 0) return '-';
       if (keys.length === 1) {
         return formatValue(obj[keys[0]]);
       }
+      // For small objects with meaningful keys, show key-value pairs
       if (keys.length <= 3) {
-        return keys.map(k => `${k}: ${formatValue(obj[k])}`).join(', ');
+        return keys.map(k => `${formatLabel(k)}: ${formatValue(obj[k])}`).join(' | ');
       }
-      // For larger objects, show count
-      return `${keys.length} items`;
+      // For larger objects, show summary with count
+      const preview = keys.slice(0, 2).map(k => `${formatLabel(k)}: ${formatValue(obj[k])}`).join(' | ');
+      return `${preview} (+${keys.length - 2} more)`;
     }
     return String(value);
   };

@@ -26,18 +26,25 @@ const CaptureModal: React.FC<CaptureModalProps> = ({
   const [showNotes, setShowNotes] = useState(false);
   const [loading, setLoading] = useState(false);
   const [gettingLocation, setGettingLocation] = useState(false);
+  const [locationSource, setLocationSource] = useState<'gps' | 'exif' | 'device' | null>(null);
 
   // Get current location if not provided
   useEffect(() => {
     if (!location) {
       setGettingLocation(true);
+      setLocationSource(null);
       const geoService = new GeoLocationService();
       geoService.getCurrentPosition()
-        .then(loc => setLocation(loc))
+        .then(loc => {
+          setLocation(loc);
+          setLocationSource('device');
+        })
         .catch(console.error)
         .finally(() => setGettingLocation(false));
+    } else if (!locationSource) {
+      setLocationSource('gps');
     }
-  }, [location]);
+  }, [location, locationSource]);
 
   // Fetch dataset values when location changes
   useEffect(() => {
@@ -55,16 +62,19 @@ const CaptureModal: React.FC<CaptureModalProps> = ({
       const file = await imageService.captureFromCamera();
       if (file) {
         const data = await imageService.processImage(file);
+        console.log('[CaptureModal] Image EXIF data:', data.exif);
         setImageData(data);
         
         // Use image GPS if available
         if (data.exif.lat && data.exif.lon) {
+          console.log('[CaptureModal] Using EXIF location:', data.exif.lat, data.exif.lon);
           setLocation({
             lat: data.exif.lat,
             lon: data.exif.lon,
             accuracy: 0,
             timestamp: Date.now()
           });
+          setLocationSource('exif');
         }
         
         // Generate preview
@@ -89,16 +99,21 @@ const CaptureModal: React.FC<CaptureModalProps> = ({
       const file = await imageService.selectFromGallery();
       if (file) {
         const data = await imageService.processImage(file);
+        console.log('[CaptureModal] Gallery image EXIF data:', data.exif);
         setImageData(data);
         
         // Use image GPS if available
         if (data.exif.lat && data.exif.lon) {
+          console.log('[CaptureModal] Using EXIF location from gallery image:', data.exif.lat, data.exif.lon);
           setLocation({
             lat: data.exif.lat,
             lon: data.exif.lon,
             accuracy: 0,
             timestamp: Date.now()
           });
+          setLocationSource('exif');
+        } else {
+          console.log('[CaptureModal] No GPS data in image, using current location');
         }
         
         // Generate preview
@@ -209,13 +224,25 @@ const CaptureModal: React.FC<CaptureModalProps> = ({
               Getting location...
             </div>
           ) : location ? (
-            <div className="dataset-value-row">
-              <span className="dataset-value-layer">Coordinates</span>
-              <span className="dataset-value-data">
-                {location.lat.toFixed(6)}, {location.lon.toFixed(6)}
-                {location.accuracy > 0 && ` (±${Math.round(location.accuracy)}m)`}
-              </span>
-            </div>
+            <>
+              <div className="dataset-value-row">
+                <span className="dataset-value-layer">Coordinates</span>
+                <span className="dataset-value-data">
+                  {location.lat.toFixed(6)}, {location.lon.toFixed(6)}
+                  {location.accuracy > 0 && ` (±${Math.round(location.accuracy)}m)`}
+                </span>
+              </div>
+              <div className="dataset-value-row" style={{ marginTop: '4px' }}>
+                <span className="dataset-value-layer">Source</span>
+                <span className="dataset-value-data" style={{ 
+                  color: locationSource === 'exif' ? 'var(--success)' : 'var(--text-secondary)'
+                }}>
+                  {locationSource === 'exif' ? '📷 From Photo EXIF' : 
+                   locationSource === 'device' ? '📍 Device GPS' : 
+                   '🗺️ Map Location'}
+                </span>
+              </div>
+            </>
           ) : (
             <div style={{ color: 'var(--error)', fontSize: '13px' }}>
               Location unavailable
@@ -236,8 +263,18 @@ const CaptureModal: React.FC<CaptureModalProps> = ({
               </div>
             ))
           ) : (
-            <div style={{ color: 'var(--text-muted)', fontSize: '13px', padding: '8px 0' }}>
-              No active layers or data at this location
+            <div style={{ 
+              color: 'var(--text-muted)', 
+              fontSize: '13px', 
+              padding: '12px',
+              background: 'var(--bg-tertiary)',
+              borderRadius: '8px',
+              textAlign: 'center'
+            }}>
+              <p style={{ margin: '0 0 8px 0' }}>📊 No dataset layers active</p>
+              <p style={{ margin: 0, fontSize: '11px', opacity: 0.8 }}>
+                Activate layers from the Layers tab to see values at this location
+              </p>
             </div>
           )}
         </div>

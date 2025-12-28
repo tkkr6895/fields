@@ -842,6 +842,25 @@ html, body, #root {
   text-overflow: ellipsis;
 }
 
+/* View on Map Button */
+.go-to-location-btn {
+  margin-top: 8px;
+  padding: 6px 12px;
+  background: var(--accent);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 11px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.go-to-location-btn:hover {
+  background: #2d6a4f;
+}
+
 /* Export Buttons */
 .export-buttons {
   display: flex;

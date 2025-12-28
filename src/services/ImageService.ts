@@ -31,6 +31,8 @@ export class ImageService {
 
   async extractExif(file: File | Blob): Promise<ExifData> {
     try {
+      console.log('[ImageService] Extracting EXIF from file:', file.type, file.size);
+      
       const exifData = await exifr.parse(file, {
         gps: true,
         xmp: false,
@@ -45,7 +47,10 @@ export class ImageService {
         ]
       });
 
+      console.log('[ImageService] Raw EXIF data:', exifData);
+
       if (!exifData) {
+        console.log('[ImageService] No EXIF data found in image');
         return {};
       }
 
@@ -61,11 +66,15 @@ export class ImageService {
 
       // Parse GPS coordinates
       if (exifData.latitude !== undefined && exifData.longitude !== undefined) {
+        console.log('[ImageService] Found GPS via latitude/longitude:', exifData.latitude, exifData.longitude);
         result.lat = exifData.latitude;
         result.lon = exifData.longitude;
       } else if (exifData.GPSLatitude !== undefined && exifData.GPSLongitude !== undefined) {
+        console.log('[ImageService] Found GPS via GPSLatitude/GPSLongitude:', exifData.GPSLatitude, exifData.GPSLongitude);
         result.lat = exifData.GPSLatitude;
         result.lon = exifData.GPSLongitude;
+      } else {
+        console.log('[ImageService] No GPS coordinates found in EXIF');
       }
 
       // Parse orientation
@@ -139,6 +148,12 @@ export class ImageService {
     const record = await db.images.get(blobId);
     if (!record) return null;
     return URL.createObjectURL(record.blob);
+  }
+
+  async getImageBlob(blobId: string): Promise<Blob | null> {
+    const record = await db.images.get(blobId);
+    if (!record) return null;
+    return record.blob;
   }
 
   async captureFromCamera(): Promise<File | null> {

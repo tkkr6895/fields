@@ -69,19 +69,32 @@ const LocationInfoPanel: React.FC<LocationInfoPanelProps> = ({ location, isOnlin
         const dwStats = dynamicWorldService.getRegionalStats(latestYear) || dynamicWorldService.getRegionalStats();
         
         if (dwStats) {
+          // Calculate percentages from area data
+          const total = dwStats.water + dwStats.trees + dwStats.grass + 
+                       dwStats.floodedVegetation + dwStats.crops + 
+                       dwStats.shrubAndScrub + dwStats.built + dwStats.bare;
+          
+          const treesPct = total > 0 ? (dwStats.trees / total * 100).toFixed(1) : '0.0';
+          const cropsPct = total > 0 ? (dwStats.crops / total * 100).toFixed(1) : '0.0';
+          const builtPct = total > 0 ? (dwStats.built / total * 100).toFixed(1) : '0.0';
+          const shrubPct = total > 0 ? (dwStats.shrubAndScrub / total * 100).toFixed(1) : '0.0';
+          const waterPct = total > 0 ? (dwStats.water / total * 100).toFixed(1) : '0.0';
+          const grassPct = total > 0 ? (dwStats.grass / total * 100).toFixed(1) : '0.0';
+          
           setSections(prev => ({
             ...prev,
             dynamicWorld: { 
               ...prev.dynamicWorld, 
               status: 'loaded', 
               data: {
-                year: dwStats.year,
-                'Trees (%)': dwStats.trees?.toFixed(1),
-                'Crops (%)': dwStats.crops?.toFixed(1),
-                'Built (%)': dwStats.built?.toFixed(1),
-                'Shrub & Scrub (%)': dwStats.shrubAndScrub?.toFixed(1),
-                'Water (%)': dwStats.water?.toFixed(1),
-                'Grass (%)': dwStats.grass?.toFixed(1),
+                '⚠️ Note': 'Regional average (WG)',
+                'Year': dwStats.year,
+                '🌳 Trees': `${treesPct}%`,
+                '🌾 Crops': `${cropsPct}%`,
+                '🏘️ Built': `${builtPct}%`,
+                '🌿 Shrub & Scrub': `${shrubPct}%`,
+                '💧 Water': `${waterPct}%`,
+                '🌱 Grass': `${grassPct}%`,
               }
             }
           }));

@@ -5,6 +5,7 @@ export interface LocationData {
   lon: number;
   accuracy: number;
   timestamp?: number;
+  altitude?: number;
 }
 
 export interface DatasetLayer {
@@ -55,11 +56,13 @@ export interface BasemapConfig {
 
 export interface ExifData {
   timestamp?: string;
+  dateTime?: string;
   lat?: number;
   lon?: number;
   orientation?: number;
   camera?: string;
   make?: string;
+  model?: string;
 }
 
 export interface ImageData {

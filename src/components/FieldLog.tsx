@@ -5,7 +5,8 @@ import { imageService } from '../services/ImageService';
 import { weatherService } from '../services/WeatherService';
 import { dynamicWorldService } from '../services/DynamicWorldService';
 import { coreStackService } from '../services/CoreStackService';
-import type { ValidationStatus, DatasetValues } from '../types';
+import { ObservationDetailModal, ModalObservation } from './ObservationDetailModal';
+import type { ValidationStatus, DatasetValues, Observation } from '../types';
 
 interface FieldLogProps {
   onGoToLocation: (lat: number, lon: number) => void;
@@ -22,6 +23,7 @@ const FieldLog: React.FC<FieldLogProps> = ({ onGoToLocation }) => {
   const [filter, setFilter] = useState<ValidationStatus | 'all'>('all');
   const [imageUrls, setImageUrls] = useState<Record<string, string>>({});
   const [dbError, setDbError] = useState<string | null>(null);
+  const [selectedObservation, setSelectedObservation] = useState<ModalObservation | null>(null);
   const [syncProgress, setSyncProgress] = useState<SyncProgress>({
     current: 0,
     total: 0,
@@ -235,6 +237,51 @@ const FieldLog: React.FC<FieldLogProps> = ({ onGoToLocation }) => {
     }
   };
 
+  // Convert DB observation to modal format
+  const toModalObservation = (obs: Observation): ModalObservation => ({
+    id: obs.id,
+    latitude: obs.location.lat,
+    longitude: obs.location.lon,
+    altitude: obs.location.altitude,
+    observation_type: 'Field Observation',
+    validation_status: obs.userValidation,
+    notes: obs.notes,
+    dataset_values: obs.datasetValues,
+    exif_data: obs.image?.exif ? {
+      dateTime: obs.image.exif.dateTime,
+      make: obs.image.exif.make,
+      model: obs.image.exif.model,
+      lat: obs.image.exif.lat,
+      lon: obs.image.exif.lon
+    } : undefined,
+    image_id: obs.image?.blobId,
+    created_at: obs.timestamp,
+    updated_at: obs.timestamp
+  });
+
+  // Handle observation click - open detail modal
+  const handleObservationClick = (obs: Observation) => {
+    setSelectedObservation(toModalObservation(obs));
+  };
+
+  // Handle observation update from modal
+  const handleObservationUpdate = async (updated: ModalObservation) => {
+    if (!updated.id) return;
+    
+    await db.observations.update(updated.id, {
+      notes: updated.notes,
+      userValidation: updated.validation_status as ValidationStatus
+    });
+    
+    setSelectedObservation(null);
+  };
+
+  // Handle observation delete
+  const handleObservationDelete = async (id: string) => {
+    await db.observations.delete(id);
+    setSelectedObservation(null);
+  };
+
   return (
     <div className="field-log">
       {/* Database Error */}
@@ -298,7 +345,7 @@ const FieldLog: React.FC<FieldLogProps> = ({ onGoToLocation }) => {
             <div
               key={obs.id}
               className="log-entry"
-              onClick={() => onGoToLocation(obs.location.lat, obs.location.lon)}
+              onClick={() => handleObservationClick(obs)}
             >
               <div className="log-entry-thumb">
                 {obs.image?.blobId && imageUrls[obs.image.blobId] ? (
@@ -330,6 +377,15 @@ const FieldLog: React.FC<FieldLogProps> = ({ onGoToLocation }) => {
                   {Object.keys(obs.datasetValues).length} layers queried
                   {obs.notes && ` • ${obs.notes.substring(0, 30)}${obs.notes.length > 30 ? '...' : ''}`}
                 </div>
+                <button 
+                  className="go-to-location-btn"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onGoToLocation(obs.location.lat, obs.location.lon);
+                  }}
+                >
+                  🗺️ View on Map
+                </button>
               </div>
             </div>
           ))}
@@ -383,6 +439,16 @@ const FieldLog: React.FC<FieldLogProps> = ({ onGoToLocation }) => {
             </div>
           )}
         </>
+      )}
+
+      {/* Observation Detail Modal */}
+      {selectedObservation && (
+        <ObservationDetailModal
+          observation={selectedObservation}
+          onClose={() => setSelectedObservation(null)}
+          onUpdate={handleObservationUpdate}
+          onDelete={handleObservationDelete}
+        />
       )}
     </div>
   );

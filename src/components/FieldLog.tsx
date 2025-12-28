@@ -2,15 +2,31 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, exportToGeoJSON, exportToCSV } from '../db/database';
 import { imageService } from '../services/ImageService';
-import type { ValidationStatus } from '../types';
+import { weatherService } from '../services/WeatherService';
+import { dynamicWorldService } from '../services/DynamicWorldService';
+import { coreStackService } from '../services/CoreStackService';
+import type { ValidationStatus, DatasetValues } from '../types';
 
 interface FieldLogProps {
   onGoToLocation: (lat: number, lon: number) => void;
 }
 
+interface SyncProgress {
+  current: number;
+  total: number;
+  status: 'idle' | 'syncing' | 'complete' | 'error';
+  message: string;
+}
+
 const FieldLog: React.FC<FieldLogProps> = ({ onGoToLocation }) => {
   const [filter, setFilter] = useState<ValidationStatus | 'all'>('all');
   const [imageUrls, setImageUrls] = useState<Record<string, string>>({});
+  const [syncProgress, setSyncProgress] = useState<SyncProgress>({
+    current: 0,
+    total: 0,
+    status: 'idle',
+    message: ''
+  });
 
   // Live query observations
   const observations = useLiveQuery(async () => {
@@ -69,6 +85,122 @@ const FieldLog: React.FC<FieldLogProps> = ({ onGoToLocation }) => {
     a.download = filename;
     a.click();
     URL.revokeObjectURL(url);
+  }, [observations]);
+
+  // Sync observations with external services
+  const handleSync = useCallback(async () => {
+    if (!observations || observations.length === 0) {
+      alert('No observations to sync');
+      return;
+    }
+
+    setSyncProgress({
+      current: 0,
+      total: observations.length,
+      status: 'syncing',
+      message: 'Starting sync...'
+    });
+
+    let successCount = 0;
+    let errorCount = 0;
+
+    for (let i = 0; i < observations.length; i++) {
+      const obs = observations[i];
+      const lat = obs.location.lat;
+      const lon = obs.location.lon;
+
+      setSyncProgress(prev => ({
+        ...prev,
+        current: i + 1,
+        message: `Enriching observation ${i + 1} of ${observations.length}...`
+      }));
+
+      try {
+        const enrichedData: Record<string, unknown> = { ...obs.datasetValues };
+
+        // Fetch weather data
+        try {
+          setSyncProgress(prev => ({ ...prev, message: `[${i + 1}/${observations.length}] Fetching weather...` }));
+          const weatherData = await weatherService.getWeather(lat, lon);
+          if (weatherData && weatherData.current) {
+            enrichedData['weather_temp'] = weatherData.current.temperature;
+            enrichedData['weather_humidity'] = weatherData.current.humidity;
+            enrichedData['weather_description'] = weatherData.current.weatherDescription;
+            enrichedData['weather_precip'] = weatherData.current.precipitation;
+          }
+        } catch (e) {
+          console.warn('Weather fetch failed:', e);
+        }
+
+        // Fetch Dynamic World land cover
+        try {
+          setSyncProgress(prev => ({ ...prev, message: `[${i + 1}/${observations.length}] Fetching land cover...` }));
+          const dwData = await dynamicWorldService.fetchPointData(lat, lon);
+          if (dwData) {
+            enrichedData['dw_landcover'] = dwData.landCoverClass;
+            enrichedData['dw_confidence'] = dwData.confidence;
+            enrichedData['dw_trees'] = dwData.probabilities.trees;
+            enrichedData['dw_crops'] = dwData.probabilities.crops;
+            enrichedData['dw_built'] = dwData.probabilities.built;
+          }
+        } catch (e) {
+          console.warn('Dynamic World fetch failed:', e);
+        }
+
+        // Fetch CoreStack data if available
+        try {
+          if (coreStackService.isAvailable()) {
+            setSyncProgress(prev => ({ ...prev, message: `[${i + 1}/${observations.length}] Fetching CoreStack...` }));
+            const coreData = await coreStackService.enrichLocation(lat, lon);
+            if (coreData && coreData.admin) {
+              enrichedData['corestack_state'] = coreData.admin.state_name;
+              enrichedData['corestack_district'] = coreData.admin.district_name;
+              enrichedData['corestack_tehsil'] = coreData.admin.tehsil_name;
+              enrichedData['corestack_mws_id'] = coreData.mwsId;
+            }
+            if (coreData && coreData.indicators) {
+              coreData.indicators.forEach(ind => {
+                enrichedData[`corestack_${ind.indicator_name.toLowerCase().replace(/\s+/g, '_')}`] = ind.value;
+              });
+            }
+          }
+        } catch (e) {
+          console.warn('CoreStack fetch failed:', e);
+        }
+
+        // Update observation in database with enriched data
+        // Store enriched data in a sync_data layer
+        const updatedValues: DatasetValues = {
+          ...obs.datasetValues,
+          sync_data: enrichedData as { [field: string]: unknown }
+        };
+        
+        await db.observations.update(obs.id!, {
+          datasetValues: updatedValues,
+          synced: true
+        });
+
+        successCount++;
+      } catch (error) {
+        console.error(`Failed to sync observation ${obs.id}:`, error);
+        errorCount++;
+      }
+
+      // Small delay to avoid overwhelming APIs
+      await new Promise(resolve => setTimeout(resolve, 300));
+    }
+
+    setSyncProgress({
+      current: observations.length,
+      total: observations.length,
+      status: 'complete',
+      message: `Sync complete! ${successCount} enriched, ${errorCount} errors`
+    });
+
+    // Reset status after 3 seconds
+    setTimeout(() => {
+      setSyncProgress({ current: 0, total: 0, status: 'idle', message: '' });
+    }, 3000);
   }, [observations]);
 
   const formatTime = (timestamp: string) => {
@@ -176,18 +308,51 @@ const FieldLog: React.FC<FieldLogProps> = ({ onGoToLocation }) => {
           {/* Export Buttons */}
           <div className="export-buttons">
             <button
+              className={`export-btn sync-btn ${syncProgress.status === 'syncing' ? 'syncing' : ''}`}
+              onClick={handleSync}
+              disabled={syncProgress.status === 'syncing'}
+            >
+              {syncProgress.status === 'syncing' ? (
+                <>
+                  <span className="sync-spinner"></span>
+                  Syncing...
+                </>
+              ) : syncProgress.status === 'complete' ? (
+                <>✅ Synced</>
+              ) : (
+                <>🔄 Sync Data</>
+              )}
+            </button>
+            <button
               className="export-btn"
               onClick={() => handleExport('geojson')}
+              disabled={syncProgress.status === 'syncing'}
             >
-              📥 Export GeoJSON
+              📥 GeoJSON
             </button>
             <button
               className="export-btn"
               onClick={() => handleExport('csv')}
+              disabled={syncProgress.status === 'syncing'}
             >
-              📥 Export CSV
+              📥 CSV
             </button>
           </div>
+
+          {/* Sync Progress */}
+          {syncProgress.status !== 'idle' && (
+            <div className={`sync-progress ${syncProgress.status}`}>
+              <div className="sync-progress-bar">
+                <div 
+                  className="sync-progress-fill"
+                  style={{ width: `${(syncProgress.current / syncProgress.total) * 100}%` }}
+                />
+              </div>
+              <div className="sync-progress-text">
+                {syncProgress.message}
+              </div>
+            </div>
+          )}
         </>
       )}
     </div>

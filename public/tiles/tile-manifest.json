@@ -1,0 +1,71 @@
+{
+  "version": "1.0",
+  "generated": "2025-12-28T15:35:19.277373",
+  "bounds": {
+    "min_lon": 72.5,
+    "max_lon": 78.5,
+    "min_lat": 8.0,
+    "max_lat": 21.5
+  },
+  "zoom_range": [
+    8,
+    13
+  ],
+  "layers": [
+    {
+      "id": "lulc_glc_1987",
+      "title": "LULC 1987 (GLC)",
+      "category": "lulc",
+      "year": 1987,
+      "description": "Land Use Land Cover classification for 1987 from GLC-FCS30D dataset",
+      "color_scheme": "lulc",
+      "tile_path": "/tiles/lulc_glc_1987/{z}/{x}/{y}.png",
+      "min_zoom": 8,
+      "max_zoom": 13
+    },
+    {
+      "id": "lulc_glc_1992",
+      "title": "LULC 1992 (GLC)",
+      "category": "lulc",
+      "year": 1992,
+      "description": "Land Use Land Cover classification for 1992 from GLC-FCS30D dataset",
+      "color_scheme": "lulc",
+      "tile_path": "/tiles/lulc_glc_1992/{z}/{x}/{y}.png",
+      "min_zoom": 8,
+      "max_zoom": 13
+    },
+    {
+      "id": "lulc_glc_1997",
+      "title": "LULC 1997 (GLC)",
+      "category": "lulc",
+      "year": 1997,
+      "description": "Land Use Land Cover classification for 1997 from GLC-FCS30D dataset",
+      "color_scheme": "lulc",
+      "tile_path": "/tiles/lulc_glc_1997/{z}/{x}/{y}.png",
+      "min_zoom": 8,
+      "max_zoom": 13
+    },
+    {
+      "id": "lulc_glc_2000",
+      "title": "LULC 2000 (GLC)",
+      "category": "lulc",
+      "year": 2000,
+      "description": "Land Use Land Cover classification for 2000 from GLC-FCS30D dataset",
+      "color_scheme": "lulc",
+      "tile_path": "/tiles/lulc_glc_2000/{z}/{x}/{y}.png",
+      "min_zoom": 8,
+      "max_zoom": 13
+    },
+    {
+      "id": "lulc_glc_2005",
+      "title": "LULC 2005 (GLC)",
+      "category": "lulc",
+      "year": 2005,
+      "description": "Land Use Land Cover classification for 2005 from GLC-FCS30D dataset",
+      "color_scheme": "lulc",
+      "tile_path": "/tiles/lulc_glc_2005/{z}/{x}/{y}.png",
+      "min_zoom": 8,
+      "max_zoom": 13
+    }
+  ]
+}

@@ -1,80 +1,107 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
-import MapView from './components/MapView';
-import BottomSheet from './components/BottomSheet';
-import LayerPanel from './components/LayerPanel';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import MapView, { MapViewRef } from './components/MapView';
+import Header from './components/Header';
+import BottomNav from './components/BottomNav';
+import MapControls from './components/MapControls';
 import SearchBar from './components/SearchBar';
-import LocationSummary from './components/LocationSummary';
-import CaptureButton from './components/CaptureButton';
-import FieldLog from './components/FieldLog';
+import LayerPanelPro from './components/LayerPanelPro';
+import LocationInfoPanel from './components/LocationInfoPanel';
 import CaptureModal from './components/CaptureModal';
-import NetworkIndicator from './components/NetworkIndicator';
-import { db } from './db/database';
-import { DatasetManager } from './services/DatasetManager';
-import { GeoLocationService } from './services/GeoLocationService';
-import { syncService, SyncStatus } from './services/SyncService';
-import { coreStackService } from './services/CoreStackService';
-import { dynamicWorldService } from './services/DynamicWorldService';
+import FieldLog from './components/FieldLog';
+import FieldProtocols from './components/FieldProtocols';
+import SpeciesGuide from './components/SpeciesGuide';
 import { useNetworkStatus } from './hooks/useNetworkStatus';
-import type { DatasetLayer, Observation, LocationData } from './types';
+import { DatasetManager } from './services/DatasetManager';
+import { rasterLayerService } from './services/RasterLayerService';
+import { GeoLocationService } from './services/GeoLocationService';
+import { db } from './db/database';
+import type { LocationData, Observation, DatasetLayer, DatasetValues } from './types';
+import './styles/global.css';
 
-const App: React.FC = () => {
-  const [layers, setLayers] = useState<DatasetLayer[]>([]);
-  const [activeLayers, setActiveLayers] = useState<Set<string>>(new Set());
-  const [showLayerPanel, setShowLayerPanel] = useState(false);
-  const [showFieldLog, setShowFieldLog] = useState(false);
-  const [showCapture, setShowCapture] = useState(false);
-  const [currentLocation, setCurrentLocation] = useState<LocationData | null>(null);
-  const [locationSummary, setLocationSummary] = useState<Record<string, unknown> | null>(null);
-  const [showSummary, setShowSummary] = useState(false);
+type TabType = 'map' | 'layers' | 'protocols' | 'log';
+
+// Create singleton instance
+const datasetManager = new DatasetManager();
+
+function App() {
+  // Map state
+  const [center, setCenter] = useState<[number, number]>([75.5, 13.0]);
+  const [zoom, setZoom] = useState(8);
   const [basemap, setBasemap] = useState<'dark' | 'satellite'>('dark');
-  const [mapCenter, setMapCenter] = useState<[number, number]>([75.5, 13.0]); // Western Ghats center
-  const [mapZoom, setMapZoom] = useState(8);
-  const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null);
-  const [showApiKeyModal, setShowApiKeyModal] = useState(false);
+  const [layers, setLayers] = useState<DatasetLayer[]>([]);
+  const [activeLayers, setActiveLayers] = useState<Set<string>>(new Set(['western_ghats_boundary']));
   
-  const networkStatus = useNetworkStatus();
-  const datasetManagerRef = useRef<DatasetManager | null>(null);
-  const geoServiceRef = useRef(new GeoLocationService());
-
-  // Initialize datasets and Dynamic World service
+  // Navigation state
+  const [activeTab, setActiveTab] = useState<TabType>('map');
+  const [showCapture, setShowCapture] = useState(false);
+  const [showProtocols, setShowProtocols] = useState(false);
+  const [showSpecies, setShowSpecies] = useState(false);
+  const [showLocationInfo, setShowLocationInfo] = useState(false);
+  const [searchedLocation, setSearchedLocation] = useState<LocationData | null>(null);
+  
+  // Location state
+  const [currentLocation, setCurrentLocation] = useState<LocationData | null>(null);
+  
+  // Data state
+  const [pendingSync, setPendingSync] = useState(0);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  
+  // Map reference for controls
+  const mapRef = useRef<MapViewRef>(null);
+  
+  // Location service
+  const geoService = useRef(new GeoLocationService());
+  
+  // Network status
+  const { isOnline } = useNetworkStatus();
+  
+  // Initialize app
   useEffect(() => {
-    const initDatasets = async () => {
+    // Load layers from dataset manager and raster service
+    const loadLayers = async () => {
       try {
-        // Initialize Dataset Manager
-        datasetManagerRef.current = new DatasetManager();
-        await datasetManagerRef.current.initialize();
-        const loadedLayers = datasetManagerRef.current.getLayers();
-        setLayers(loadedLayers);
+        // Load vector/CSV layers
+        await datasetManager.initialize();
+        const csvLayers = datasetManager.getLayers();
         
-        // Load Dynamic World cached data
-        await dynamicWorldService.loadCachedData();
+        // Load raster image overlay layers
+        const rasterLayers = await rasterLayerService.getRasterLayers();
         
-        // Enable first 2 layers by default
-        const defaultActive = new Set(loadedLayers.slice(0, 2).map(l => l.id));
-        setActiveLayers(defaultActive);
+        // Combine all layers
+        const allLayers = [...csvLayers, ...rasterLayers];
+        setLayers(allLayers);
+        
+        console.log(`Loaded ${csvLayers.length} CSV layers, ${rasterLayers.length} raster layers`);
       } catch (err) {
-        console.error('Failed to initialize datasets:', err);
+        console.error('Failed to load layers:', err);
       }
     };
-    initDatasets();
-  }, []);
-
-  // Initialize sync service
-  useEffect(() => {
-    // Subscribe to sync status updates
-    const unsubscribe = syncService.subscribe(setSyncStatus);
+    loadLayers();
     
-    // Start auto-sync when online
-    const stopAutoSync = syncService.startAutoSync(60000); // Every minute
+    // Count pending observations
+    const countPending = async () => {
+      const pending = await db.observations.where('synced').equals(0).count();
+      setPendingSync(pending);
+    };
+    countPending();
+    
+    // Start location watch
+    geoService.current.watchPosition((loc) => {
+      setCurrentLocation(loc);
+    });
     
     return () => {
-      unsubscribe();
-      stopAutoSync();
+      geoService.current.stopWatching();
     };
   }, []);
 
-  // Toggle layer visibility
-  const toggleLayer = useCallback((layerId: string) => {
+  // Map handlers
+  const handleMapMove = useCallback((newCenter: [number, number], newZoom: number) => {
+    setCenter(newCenter);
+    setZoom(newZoom);
+  }, []);
+
+  const handleLayerToggle = useCallback((layerId: string) => {
     setActiveLayers(prev => {
       const next = new Set(prev);
       if (next.has(layerId)) {
@@ -86,254 +113,247 @@ const App: React.FC = () => {
     });
   }, []);
 
-  // Handle locate me
-  const handleLocateMe = useCallback(async () => {
+  // Get dataset values at location
+  const getDatasetValues = useCallback(async (lat: number, lon: number): Promise<DatasetValues> => {
     try {
-      const location = await geoServiceRef.current.getCurrentPosition();
-      setCurrentLocation(location);
-      setMapCenter([location.lon, location.lat]);
-      setMapZoom(14);
-      
-      // Get summary for location
-      if (datasetManagerRef.current) {
-        const summary = await datasetManagerRef.current.getSummaryAtPoint(
-          location.lat,
-          location.lon,
-          Array.from(activeLayers)
-        );
-        setLocationSummary(summary);
-        setShowSummary(true);
-      }
+      const activeLayerIds = Array.from(activeLayers);
+      const values = await datasetManager.getValuesAtPoint(lat, lon, activeLayerIds);
+      return values || {};
     } catch (err) {
-      console.error('Location error:', err);
-      alert('Could not get location. Please enable GPS.');
+      console.error('Failed to query point:', err);
+      return {};
     }
   }, [activeLayers]);
 
-  // Handle search
-  const handleSearch = useCallback(async (lat: number, lon: number, placeName?: string) => {
-    setMapCenter([lon, lat]);
-    setMapZoom(14);
-    setCurrentLocation({ lat, lon, accuracy: 0 });
-    
-    // Get summary for location
-    if (datasetManagerRef.current) {
-      const summary = await datasetManagerRef.current.getSummaryAtPoint(
-        lat,
-        lon,
-        Array.from(activeLayers)
-      );
-      
-      // If online and API key is set, try to enrich with CoreStack data
-      if (networkStatus.isOnline && coreStackService.hasApiKey()) {
-        try {
-          const enrichment = await coreStackService.enrichLocation(lat, lon);
-          if (!enrichment.error) {
-            Object.assign(summary, {
-              admin: enrichment.admin,
-              mwsId: enrichment.mwsId,
-              indicators: enrichment.indicators
-            });
-          }
-        } catch (e) {
-          console.warn('CoreStack enrichment failed:', e);
-        }
-      }
-      
-      // Add Dynamic World summary
-      const dwSummary = dynamicWorldService.getSummaryForLocation();
-      if (dwSummary) {
-        Object.assign(summary, { dynamicWorld: dwSummary });
-      }
-      
-      if (placeName) {
-        (summary as Record<string, unknown>).placeName = placeName;
-      }
-      
-      setLocationSummary(summary);
-      setShowSummary(true);
+  // Handle new observation
+  const handleCapture = useCallback(async (observation: Observation) => {
+    try {
+      await db.observations.add(observation);
+      setPendingSync(prev => prev + 1);
+      setShowCapture(false);
+    } catch (err) {
+      console.error('Failed to save observation:', err);
     }
-  }, [activeLayers, networkStatus.isOnline]);
-
-  // Handle capture observation
-  const handleCaptureComplete = useCallback(async (observation: Observation) => {
-    await db.observations.add(observation);
-    setShowCapture(false);
   }, []);
 
-  // Get dataset values at current location for capture
-  const getDatasetValuesAtPoint = useCallback(async (lat: number, lon: number) => {
-    if (!datasetManagerRef.current) return {};
-    return await datasetManagerRef.current.getValuesAtPoint(lat, lon, Array.from(activeLayers));
-  }, [activeLayers]);
+  // Control handlers
+  const handleZoomIn = useCallback(() => mapRef.current?.zoomIn(), []);
+  const handleZoomOut = useCallback(() => mapRef.current?.zoomOut(), []);
+  
+  const handleLocateMe = useCallback(async () => {
+    if (currentLocation) {
+      mapRef.current?.flyTo([currentLocation.lon, currentLocation.lat], 15);
+      return true;
+    }
+    try {
+      const loc = await geoService.current.getCurrentPosition();
+      setCurrentLocation(loc);
+      mapRef.current?.flyTo([loc.lon, loc.lat], 15);
+      return true;
+    } catch {
+      return false;
+    }
+  }, [currentLocation]);
+
+  const handleResetView = useCallback(() => mapRef.current?.resetView(), []);
+
+  // Handle search result selection
+  const handleSearch = useCallback((lat: number, lon: number, placeName?: string) => {
+    console.log('Search:', lat, lon, placeName);
+    mapRef.current?.flyTo([lon, lat], 14);
+    const loc: LocationData = { lat, lon, accuracy: 0 };
+    setSearchedLocation(loc);
+    // Automatically show location info after search
+    setTimeout(() => setShowLocationInfo(true), 500);
+  }, []);
+
+  // Handle map click to get info for that location
+  const handleMapClick = useCallback((lat: number, lon: number) => {
+    const loc: LocationData = { lat, lon, accuracy: 0 };
+    setSearchedLocation(loc);
+    setShowLocationInfo(true);
+  }, []);
+
+  const handleGoToLocation = useCallback((lat: number, lon: number) => {
+    mapRef.current?.flyTo([lon, lat], 15);
+    setActiveTab('map');
+  }, []);
+
+  // Basemap toggle
+  const handleBasemapToggle = useCallback(() => {
+    setBasemap(prev => prev === 'dark' ? 'satellite' : 'dark');
+  }, []);
+
+  // Tab handlers
+  const handleTabChange = useCallback((tab: string) => {
+    const typedTab = tab as TabType;
+    if (typedTab === activeTab && typedTab !== 'map') {
+      setActiveTab('map');
+    } else {
+      setActiveTab(typedTab);
+    }
+  }, [activeTab]);
+
+  // Fetch and show location info panel
+  const handleShowLocationInfo = useCallback(() => {
+    if (currentLocation) {
+      setSearchedLocation(currentLocation);
+      setShowLocationInfo(true);
+    }
+  }, [currentLocation]);
+
+  // Render panel content
+  const renderPanel = () => {
+    switch (activeTab) {
+      case 'layers':
+        return (
+          <LayerPanelPro
+            layers={layers}
+            activeLayers={activeLayers}
+            onToggle={handleLayerToggle}
+            onClose={() => setActiveTab('map')}
+          />
+        );
+      case 'protocols':
+        return (
+          <div className="panel-overlay">
+            <div className="panel-header">
+              <h2>Field Resources</h2>
+              <button className="panel-close" onClick={() => setActiveTab('map')}>✕</button>
+            </div>
+            <div className="guide-content">
+              <button className="guide-btn" onClick={() => setShowProtocols(true)}>
+                <span className="guide-icon">📋</span>
+                <span>Field Protocols</span>
+              </button>
+              <button className="guide-btn" onClick={() => setShowSpecies(true)}>
+                <span className="guide-icon">🌿</span>
+                <span>Species Guide</span>
+              </button>
+              <button className="guide-btn" onClick={handleShowLocationInfo} disabled={!currentLocation}>
+                <span className="guide-icon">📍</span>
+                <span>Location Summary</span>
+              </button>
+            </div>
+          </div>
+        );
+      case 'log':
+        return (
+          <div className="panel-overlay">
+            <div className="panel-header">
+              <h2>Field Log</h2>
+              <button className="panel-close" onClick={() => setActiveTab('map')}>✕</button>
+            </div>
+            <FieldLog onGoToLocation={handleGoToLocation} />
+          </div>
+        );
+      default:
+        return null;
+    }
+  };
 
   return (
-    <div className="app-container">
-      {/* Main Map */}
-      <MapView
-        center={mapCenter}
-        zoom={mapZoom}
-        basemap={basemap}
-        layers={layers}
-        activeLayers={activeLayers}
-        currentLocation={currentLocation}
-        onMapMove={(center, zoom) => {
-          setMapCenter(center);
-          setMapZoom(zoom);
-        }}
+    <div className="app">
+      <Header
+        isOnline={isOnline}
+        syncStatus={{ pending: pendingSync }}
+        onSettingsClick={() => setSettingsOpen(!settingsOpen)}
       />
-
-      {/* Top Controls */}
-      <div className="top-controls">
-        <SearchBar onSearch={handleSearch} isOnline={networkStatus.isOnline} />
-        
-        <NetworkIndicator 
-          status={networkStatus} 
-          pendingSync={syncStatus?.pendingObservations || 0} 
-        />
-        
-        <div className="basemap-toggle">
-          <button
-            className={basemap === 'dark' ? 'active' : ''}
-            onClick={() => setBasemap('dark')}
-            title="Map View"
-          >
-            🗺️
-          </button>
-          <button
-            className={basemap === 'satellite' ? 'active' : ''}
-            onClick={() => setBasemap('satellite')}
-            title="Satellite View"
-          >
-            🛰️
-          </button>
-        </div>
+      
+      {/* Search Bar - Always visible on map */}
+      <div className="search-container">
+        <SearchBar onSearch={handleSearch} isOnline={isOnline} />
       </div>
-
-      {/* Right Side Controls */}
-      <div className="side-controls">
-        <button 
-          className="control-btn"
-          onClick={handleLocateMe}
-          title="Locate Me"
-        >
-          📍
-        </button>
-        <button 
-          className={`control-btn ${showLayerPanel ? 'active' : ''}`}
-          onClick={() => setShowLayerPanel(!showLayerPanel)}
-          title="Layers"
-        >
-          ⚙️
-        </button>
-        <button 
-          className={`control-btn ${showFieldLog ? 'active' : ''}`}
-          onClick={() => setShowFieldLog(!showFieldLog)}
-          title="Field Log"
-        >
-          📋
-        </button>
-        <button 
-          className="control-btn"
-          onClick={() => setShowApiKeyModal(true)}
-          title="API Settings"
-        >
-          🔑
-        </button>
-      </div>
-
-      {/* Layer Panel - Side Sheet */}
-      {showLayerPanel && (
-        <LayerPanel
+      
+      <main className="main-content">
+        {/* Map always visible */}
+        <MapView
+          ref={mapRef}
+          center={center}
+          zoom={zoom}
+          basemap={basemap}
           layers={layers}
           activeLayers={activeLayers}
-          onToggle={toggleLayer}
-          onClose={() => setShowLayerPanel(false)}
+          currentLocation={currentLocation}
+          onMapMove={handleMapMove}
+          onMapClick={handleMapClick}
         />
-      )}
-
-      {/* Location Summary - Compact Bottom Sheet */}
-      {showSummary && locationSummary && (
-        <LocationSummary
-          summary={locationSummary}
-          location={currentLocation}
-          onClose={() => setShowSummary(false)}
+        
+        {/* Map Controls */}
+        <MapControls
+          onZoomIn={handleZoomIn}
+          onZoomOut={handleZoomOut}
+          onLocateMe={handleLocateMe}
+          onResetView={handleResetView}
         />
-      )}
-
-      {/* Field Log - Bottom Sheet */}
-      {showFieldLog && (
-        <BottomSheet
-          title="Field Log"
-          onClose={() => setShowFieldLog(false)}
+        
+        {/* Basemap Toggle */}
+        <button 
+          className="basemap-toggle"
+          onClick={handleBasemapToggle}
+          title={`Switch to ${basemap === 'dark' ? 'satellite' : 'dark'} view`}
         >
-          <FieldLog 
-            onGoToLocation={(lat, lon) => {
-              setMapCenter([lon, lat]);
-              setMapZoom(16);
-              setShowFieldLog(false);
-            }}
-          />
-        </BottomSheet>
-      )}
-
-      {/* Capture Button - Primary Action */}
-      <CaptureButton onClick={() => setShowCapture(true)} />
-
-      {/* Capture Modal */}
+          {basemap === 'dark' ? '🛰️' : '🌙'}
+        </button>
+        
+        {/* Active Layers Indicator */}
+        {activeLayers.size > 0 && activeTab === 'map' && (
+          <div className="active-layers-indicator" onClick={() => setActiveTab('layers')}>
+            {activeLayers.size} layer{activeLayers.size !== 1 ? 's' : ''} active
+          </div>
+        )}
+        
+        {/* Overlay Panels */}
+        {renderPanel()}
+      </main>
+      
+      {/* Bottom Navigation */}
+      <BottomNav
+        activeTab={activeTab}
+        onTabChange={handleTabChange}
+        onCaptureClick={() => setShowCapture(true)}
+        pendingSync={pendingSync}
+      />
+      
+      {/* Modals */}
       {showCapture && (
         <CaptureModal
           currentLocation={currentLocation}
-          getDatasetValues={getDatasetValuesAtPoint}
-          onCapture={handleCaptureComplete}
+          getDatasetValues={getDatasetValues}
+          onCapture={handleCapture}
           onClose={() => setShowCapture(false)}
         />
       )}
-
-      {/* API Key Settings Modal */}
-      {showApiKeyModal && (
-        <div className="modal-overlay" onClick={() => setShowApiKeyModal(false)}>
-          <div className="modal-content api-key-modal" onClick={e => e.stopPropagation()}>
-            <h3>CoreStack API Settings</h3>
-            <p className="modal-description">
-              Enter your CoreStack API key to enable online data enrichment.
-              This allows fetching watershed data, admin details, and more when online.
-            </p>
-            <form onSubmit={(e) => {
-              e.preventDefault();
-              const form = e.target as HTMLFormElement;
-              const input = form.elements.namedItem('apiKey') as HTMLInputElement;
-              if (input.value.trim()) {
-                coreStackService.setApiKey(input.value.trim());
-                setShowApiKeyModal(false);
-              }
-            }}>
-              <input
-                type="password"
-                name="apiKey"
-                placeholder="Enter API Key..."
-                defaultValue={localStorage.getItem('corestack_api_key') || ''}
-                autoComplete="off"
-              />
-              <div className="modal-actions">
-                <button type="button" onClick={() => setShowApiKeyModal(false)}>
-                  Cancel
-                </button>
-                <button type="submit" className="primary">
-                  Save
-                </button>
-              </div>
-            </form>
-            <p className="modal-hint">
-              {coreStackService.hasApiKey() 
-                ? '✅ API key is configured' 
-                : '⚠️ No API key set - online enrichment disabled'}
-            </p>
-          </div>
-        </div>
+      
+      {showProtocols && (
+        <FieldProtocols 
+          onClose={() => setShowProtocols(false)} 
+          onStartProtocol={(id) => {
+            console.log('Starting protocol:', id);
+            setShowProtocols(false);
+          }}
+        />
+      )}
+      
+      {showSpecies && (
+        <SpeciesGuide 
+          onClose={() => setShowSpecies(false)} 
+          onRecordSpecies={(id) => {
+            console.log('Recording species:', id);
+            setShowSpecies(false);
+          }}
+        />
+      )}
+      
+      {showLocationInfo && searchedLocation && (
+        <LocationInfoPanel
+          location={searchedLocation}
+          isOnline={isOnline}
+          onClose={() => setShowLocationInfo(false)}
+        />
       )}
     </div>
   );
-};
+}
 
 export default App;

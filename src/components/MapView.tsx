@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useCallback, useImperativeHandle, forwardRef } from 'react';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import type { DatasetLayer, LocationData } from '../types';
@@ -11,6 +11,15 @@ interface MapViewProps {
   activeLayers: Set<string>;
   currentLocation: LocationData | null;
   onMapMove: (center: [number, number], zoom: number) => void;
+  onMapClick?: (lat: number, lon: number) => void;
+}
+
+// Expose methods to parent
+export interface MapViewRef {
+  zoomIn: () => void;
+  zoomOut: () => void;
+  flyTo: (center: [number, number], zoom?: number) => void;
+  resetView: () => void;
 }
 
 // Dark map style for offline use
@@ -65,19 +74,58 @@ const SATELLITE_STYLE: maplibregl.StyleSpecification = {
   ]
 };
 
-const MapView: React.FC<MapViewProps> = ({
+// Western Ghats default view
+const DEFAULT_CENTER: [number, number] = [75.5, 13.0];
+const DEFAULT_ZOOM = 8;
+
+const MapView = forwardRef<MapViewRef, MapViewProps>(({
   center,
   zoom,
   basemap,
   layers,
   activeLayers,
   currentLocation,
-  onMapMove
-}) => {
+  onMapMove,
+  onMapClick
+}, ref) => {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<maplibregl.Map | null>(null);
   const userMarker = useRef<maplibregl.Marker | null>(null);
   const accuracyCircle = useRef<string | null>(null);
+
+  // Expose map methods to parent
+  useImperativeHandle(ref, () => ({
+    zoomIn: () => {
+      if (map.current) {
+        map.current.zoomIn({ duration: 300 });
+      }
+    },
+    zoomOut: () => {
+      if (map.current) {
+        map.current.zoomOut({ duration: 300 });
+      }
+    },
+    flyTo: (newCenter: [number, number], newZoom?: number) => {
+      if (map.current) {
+        map.current.flyTo({ 
+          center: newCenter, 
+          zoom: newZoom ?? map.current.getZoom(),
+          duration: 800,
+          essential: true
+        });
+      }
+    },
+    resetView: () => {
+      if (map.current) {
+        map.current.flyTo({ 
+          center: DEFAULT_CENTER, 
+          zoom: DEFAULT_ZOOM,
+          duration: 1000,
+          essential: true
+        });
+      }
+    }
+  }), []);
 
   // Initialize map
   useEffect(() => {
@@ -90,14 +138,19 @@ const MapView: React.FC<MapViewProps> = ({
       zoom: zoom,
       attributionControl: { compact: true },
       maxZoom: 18,
-      minZoom: 4
+      minZoom: 4,
+      // Improve touch handling
+      touchZoomRotate: true,
+      touchPitch: false,
+      dragRotate: false,
+      pitchWithRotate: false
     });
 
-    // Add controls
-    map.current.addControl(
-      new maplibregl.NavigationControl({ showCompass: true }),
-      'bottom-right'
-    );
+    // Remove default navigation control - we'll use custom controls
+    // map.current.addControl(
+    //   new maplibregl.NavigationControl({ showCompass: true }),
+    //   'bottom-right'
+    // );
 
     map.current.addControl(
       new maplibregl.ScaleControl({ maxWidth: 100 }),
@@ -109,6 +162,13 @@ const MapView: React.FC<MapViewProps> = ({
       if (map.current) {
         const c = map.current.getCenter();
         onMapMove([c.lng, c.lat], map.current.getZoom());
+      }
+    });
+
+    // Handle map click for location info
+    map.current.on('click', (e) => {
+      if (onMapClick) {
+        onMapClick(e.lngLat.lat, e.lngLat.lng);
       }
     });
 
@@ -125,10 +185,24 @@ const MapView: React.FC<MapViewProps> = ({
     map.current.setStyle(basemap === 'dark' ? DARK_STYLE : SATELLITE_STYLE);
   }, [basemap]);
 
-  // Update center/zoom
+  // Update center/zoom - only if significantly different to avoid loops
   useEffect(() => {
     if (!map.current) return;
-    map.current.flyTo({ center, zoom, duration: 500 });
+    const currentCenter = map.current.getCenter();
+    const currentZoom = map.current.getZoom();
+    
+    // Only fly if there's a significant change
+    const centerDiff = Math.abs(currentCenter.lng - center[0]) + Math.abs(currentCenter.lat - center[1]);
+    const zoomDiff = Math.abs(currentZoom - zoom);
+    
+    if (centerDiff > 0.001 || zoomDiff > 0.5) {
+      map.current.flyTo({ 
+        center, 
+        zoom, 
+        duration: 800,
+        essential: true
+      });
+    }
   }, [center, zoom]);
 
   // Update user location marker
@@ -302,8 +376,75 @@ const MapView: React.FC<MapViewProps> = ({
     loadGeoJSONLayers();
   }, [loadGeoJSONLayers]);
 
+  // Load and display image overlay layers (raster PNGs)
+  const loadImageOverlays = useCallback(async () => {
+    if (!map.current) return;
+
+    // Wait for style to load
+    if (!map.current.isStyleLoaded()) {
+      map.current.once('styledata', loadImageOverlays);
+      return;
+    }
+
+    for (const layer of layers) {
+      if (layer.type !== 'image-overlay' || !layer.bounds) continue;
+
+      const sourceId = `source-${layer.id}`;
+      const layerId = `layer-${layer.id}`;
+      const isActive = activeLayers.has(layer.id);
+
+      try {
+        // Check if source already exists
+        if (!map.current.getSource(sourceId)) {
+          // Add image source
+          map.current.addSource(sourceId, {
+            type: 'image',
+            url: layer.source.path,
+            coordinates: [
+              [layer.bounds.west, layer.bounds.north], // top-left
+              [layer.bounds.east, layer.bounds.north], // top-right
+              [layer.bounds.east, layer.bounds.south], // bottom-right
+              [layer.bounds.west, layer.bounds.south]  // bottom-left
+            ]
+          });
+
+          // Add raster layer
+          map.current.addLayer({
+            id: layerId,
+            type: 'raster',
+            source: sourceId,
+            paint: {
+              'raster-opacity': layer.style?.opacity ?? 0.7,
+              'raster-fade-duration': 0
+            },
+            layout: {
+              visibility: isActive ? 'visible' : 'none'
+            }
+          });
+        } else {
+          // Update visibility
+          if (map.current.getLayer(layerId)) {
+            map.current.setLayoutProperty(
+              layerId,
+              'visibility',
+              isActive ? 'visible' : 'none'
+            );
+          }
+        }
+      } catch (error) {
+        console.warn(`Failed to load image layer ${layer.id}:`, error);
+      }
+    }
+  }, [layers, activeLayers]);
+
+  useEffect(() => {
+    loadImageOverlays();
+  }, [loadImageOverlays]);
+
   return <div ref={mapContainer} className="map-container" />;
-};
+});
+
+MapView.displayName = 'MapView';
 
 // Helper to create a circle GeoJSON
 function createCircle(lng: number, lat: number, radiusMeters: number): GeoJSON.Feature {

@@ -10,21 +10,30 @@ export interface LocationData {
 export interface DatasetLayer {
   id: string;
   title: string;
-  type: 'vector' | 'raster' | 'csv';
+  type: 'vector' | 'raster' | 'csv' | 'image-overlay';
   source: {
-    format: 'geojson' | 'csv' | 'pmtiles' | 'mbtiles' | 'tiff';
+    format: 'geojson' | 'csv' | 'pmtiles' | 'mbtiles' | 'tiff' | 'png';
     path: string;
   };
   style?: {
-    kind: 'categorical' | 'choropleth' | 'point' | 'polygon';
+    kind: 'categorical' | 'choropleth' | 'point' | 'polygon' | 'image';
     field?: string;
     colors?: Record<string, string>;
+    opacity?: number;
   };
   query?: {
     mode: 'feature_at_point' | 'summary' | 'buffer';
     fields: string[];
   };
-  category: 'lulc' | 'corestack' | 'forest' | 'boundary' | 'other';
+  bounds?: {
+    west: number;
+    south: number;
+    east: number;
+    north: number;
+  };
+  year?: number;
+  description?: string;
+  category: 'lulc' | 'corestack' | 'forest' | 'boundary' | 'built' | 'treecover' | 'other';
   enabled: boolean;
 }
 

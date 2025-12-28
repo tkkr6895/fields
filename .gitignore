@@ -59,3 +59,9 @@ coverage/
 
 # Capacitor
 android/app/src/main/assets/capacitor.config.json
+
+# Release APKs (too large for git)
+releases/*.apk
+
+# Release APKs
+releases/*.apk

@@ -1,0 +1,6 @@
+# Recovered Photos - DO NOT COMMIT TO PUBLIC REPO
+# These photos may contain EXIF metadata with device/location info
+# Keep locally for research purposes only
+*.jpg
+*.jpeg
+*.png

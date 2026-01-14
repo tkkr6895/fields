@@ -1,0 +1,9 @@
+# Sensitive/raw data - DO NOT COMMIT
+raw_export.json
+observations_clean.json
+sanitize_for_github.cjs
+
+# These files are safe for public GitHub:
+# - observations_public.json (sanitized)
+# - observations.geojson (GIS-ready)
+# - observations.csv (spreadsheet-ready)

@@ -1,0 +1,9 @@
+observation_id,date,time_utc,latitude,longitude,accuracy_meters,validation,notes
+1,2025-12-29,04:40:27.922,12.9824976,75.5724675,3.02,match,""
+2,2025-12-30,02:28:04.545,13.1508333,75.4255233,3.72,mismatch,"Plantation classified as forest"
+3,2025-12-29,04:55:03.632,12.9780622,75.568425,1.9,match,""
+4,2025-12-30,03:21:50.057,13.138272,75.4095324,2.17,match,"Forest at the edge of a plantation rightly classified"
+5,2025-12-29,04:01:12.636,13.0834217,75.6002867,1.72,match,"Plantation"
+6,2025-12-30,03:12:00.485,13.1406159,75.4096739,2.54,match,""
+7,2025-12-29,05:48:19.868,12.9800524,75.5653473,1.12,match,""
+8,2025-12-29,12:29:14.479,13.1612519,75.4465582,1.18,mismatch,"Plantation classified as forest"

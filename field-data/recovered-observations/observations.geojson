@@ -1,0 +1,164 @@
+{
+  "type": "FeatureCollection",
+  "name": "Western_Ghats_Field_Observations_Dec2025",
+  "crs": {
+    "type": "name",
+    "properties": {
+      "name": "urn:ogc:def:crs:OGC:1.3:CRS84"
+    }
+  },
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "id": 1,
+        "timestamp": "2025-12-29T04:40:27.922Z",
+        "date": "2025-12-29",
+        "validation": "match",
+        "notes": "",
+        "accuracy_m": 3.02,
+        "region": "Within Western Ghats"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          75.5724675,
+          12.9824976
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": 2,
+        "timestamp": "2025-12-30T02:28:04.545Z",
+        "date": "2025-12-30",
+        "validation": "mismatch",
+        "notes": "Plantation classified as forest",
+        "accuracy_m": 3.72,
+        "region": "Unknown Location"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          75.4255233,
+          13.1508333
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": 3,
+        "timestamp": "2025-12-29T04:55:03.632Z",
+        "date": "2025-12-29",
+        "validation": "match",
+        "notes": "",
+        "accuracy_m": 1.9,
+        "region": "Within Western Ghats"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          75.568425,
+          12.9780622
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": 4,
+        "timestamp": "2025-12-30T03:21:50.057Z",
+        "date": "2025-12-30",
+        "validation": "match",
+        "notes": "Forest at the edge of a plantation rightly classified",
+        "accuracy_m": 2.17,
+        "region": "Within Western Ghats"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          75.4095324,
+          13.138272
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": 5,
+        "timestamp": "2025-12-29T04:01:12.636Z",
+        "date": "2025-12-29",
+        "validation": "match",
+        "notes": "Plantation",
+        "accuracy_m": 1.72,
+        "region": "Within Western Ghats"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          75.6002867,
+          13.0834217
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": 6,
+        "timestamp": "2025-12-30T03:12:00.485Z",
+        "date": "2025-12-30",
+        "validation": "match",
+        "notes": "",
+        "accuracy_m": 2.54,
+        "region": "Within Western Ghats"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          75.4096739,
+          13.1406159
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": 7,
+        "timestamp": "2025-12-29T05:48:19.868Z",
+        "date": "2025-12-29",
+        "validation": "match",
+        "notes": "",
+        "accuracy_m": 1.12,
+        "region": "Within Western Ghats"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          75.5653473,
+          12.9800524
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": 8,
+        "timestamp": "2025-12-29T12:29:14.479Z",
+        "date": "2025-12-29",
+        "validation": "mismatch",
+        "notes": "Plantation classified as forest",
+        "accuracy_m": 1.18,
+        "region": "Within Western Ghats"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          75.4465582,
+          13.1612519
+        ]
+      }
+    }
+  ]
+}

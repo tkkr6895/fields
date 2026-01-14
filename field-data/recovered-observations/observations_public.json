@@ -1,0 +1,138 @@
+{
+  "exportDate": "2026-01-14T19:13:32.546Z",
+  "dataCollection": {
+    "startDate": "2025-12-29",
+    "endDate": "2025-12-30",
+    "region": "Western Ghats, Karnataka, India",
+    "purpose": "Land cover classification validation"
+  },
+  "statistics": {
+    "totalObservations": 8,
+    "totalPhotos": 8,
+    "validationsMatch": 6,
+    "validationsMismatch": 2,
+    "averageAccuracyMeters": 2.17
+  },
+  "observations": [
+    {
+      "observationNumber": 1,
+      "timestamp": "2025-12-29T04:40:27.922Z",
+      "coordinates": {
+        "latitude": 12.9824976,
+        "longitude": 75.5724675,
+        "accuracyMeters": 3.02
+      },
+      "region": "Within Western Ghats",
+      "classification": {
+        "userValidation": "match",
+        "notes": null
+      },
+      "hasPhoto": true
+    },
+    {
+      "observationNumber": 2,
+      "timestamp": "2025-12-30T02:28:04.545Z",
+      "coordinates": {
+        "latitude": 13.1508333,
+        "longitude": 75.4255233,
+        "accuracyMeters": 3.72
+      },
+      "region": "Unknown Location",
+      "classification": {
+        "userValidation": "mismatch",
+        "notes": "Plantation classified as forest"
+      },
+      "hasPhoto": true
+    },
+    {
+      "observationNumber": 3,
+      "timestamp": "2025-12-29T04:55:03.632Z",
+      "coordinates": {
+        "latitude": 12.9780622,
+        "longitude": 75.568425,
+        "accuracyMeters": 1.9
+      },
+      "region": "Within Western Ghats",
+      "classification": {
+        "userValidation": "match",
+        "notes": null
+      },
+      "hasPhoto": true
+    },
+    {
+      "observationNumber": 4,
+      "timestamp": "2025-12-30T03:21:50.057Z",
+      "coordinates": {
+        "latitude": 13.138272,
+        "longitude": 75.4095324,
+        "accuracyMeters": 2.17
+      },
+      "region": "Within Western Ghats",
+      "classification": {
+        "userValidation": "match",
+        "notes": "Forest at the edge of a plantation rightly classified"
+      },
+      "hasPhoto": true
+    },
+    {
+      "observationNumber": 5,
+      "timestamp": "2025-12-29T04:01:12.636Z",
+      "coordinates": {
+        "latitude": 13.0834217,
+        "longitude": 75.6002867,
+        "accuracyMeters": 1.72
+      },
+      "region": "Within Western Ghats",
+      "classification": {
+        "userValidation": "match",
+        "notes": "Plantation"
+      },
+      "hasPhoto": true
+    },
+    {
+      "observationNumber": 6,
+      "timestamp": "2025-12-30T03:12:00.485Z",
+      "coordinates": {
+        "latitude": 13.1406159,
+        "longitude": 75.4096739,
+        "accuracyMeters": 2.54
+      },
+      "region": "Within Western Ghats",
+      "classification": {
+        "userValidation": "match",
+        "notes": null
+      },
+      "hasPhoto": true
+    },
+    {
+      "observationNumber": 7,
+      "timestamp": "2025-12-29T05:48:19.868Z",
+      "coordinates": {
+        "latitude": 12.9800524,
+        "longitude": 75.5653473,
+        "accuracyMeters": 1.12
+      },
+      "region": "Within Western Ghats",
+      "classification": {
+        "userValidation": "match",
+        "notes": null
+      },
+      "hasPhoto": true
+    },
+    {
+      "observationNumber": 8,
+      "timestamp": "2025-12-29T12:29:14.479Z",
+      "coordinates": {
+        "latitude": 13.1612519,
+        "longitude": 75.4465582,
+        "accuracyMeters": 1.18
+      },
+      "region": "Within Western Ghats",
+      "classification": {
+        "userValidation": "mismatch",
+        "notes": "Plantation classified as forest"
+      },
+      "hasPhoto": true
+    }
+  ]
+}

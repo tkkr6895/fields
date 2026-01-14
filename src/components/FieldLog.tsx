@@ -6,6 +6,7 @@ import { weatherService } from '../services/WeatherService';
 import { dynamicWorldService } from '../services/DynamicWorldService';
 import { coreStackService } from '../services/CoreStackService';
 import { ObservationDetailModal, ModalObservation } from './ObservationDetailModal';
+import DataExportPanel from './DataExportPanel';
 import type { ValidationStatus, DatasetValues, Observation } from '../types';
 
 interface FieldLogProps {
@@ -24,6 +25,7 @@ const FieldLog: React.FC<FieldLogProps> = ({ onGoToLocation }) => {
   const [imageUrls, setImageUrls] = useState<Record<string, string>>({});
   const [dbError, setDbError] = useState<string | null>(null);
   const [selectedObservation, setSelectedObservation] = useState<ModalObservation | null>(null);
+  const [showExportPanel, setShowExportPanel] = useState(false);
   const [syncProgress, setSyncProgress] = useState<SyncProgress>({
     current: 0,
     total: 0,
@@ -434,6 +436,13 @@ const FieldLog: React.FC<FieldLogProps> = ({ onGoToLocation }) => {
             >
               📥 CSV
             </button>
+            <button
+              className="export-btn backup-btn"
+              onClick={() => setShowExportPanel(true)}
+              disabled={syncProgress.status === 'syncing'}
+            >
+              💾 Full Backup
+            </button>
           </div>
 
           {/* Sync Progress */}
@@ -461,6 +470,15 @@ const FieldLog: React.FC<FieldLogProps> = ({ onGoToLocation }) => {
           onUpdate={handleObservationUpdate}
           onDelete={handleObservationDelete}
         />
+      )}
+
+      {/* Full Backup Export Panel Modal */}
+      {showExportPanel && (
+        <div className="export-modal-overlay" onClick={() => setShowExportPanel(false)}>
+          <div className="export-modal-content" onClick={(e) => e.stopPropagation()}>
+            <DataExportPanel onClose={() => setShowExportPanel(false)} />
+          </div>
+        </div>
       )}
     </div>
   );

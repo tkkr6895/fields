@@ -914,6 +914,42 @@ html, body, #root {
   color: var(--accent);
 }
 
+/* Backup Button - prominent style */
+.export-btn.backup-btn {
+  background: rgba(52, 211, 153, 0.15);
+  border-color: rgba(52, 211, 153, 0.4);
+  color: #34d399;
+  font-weight: 600;
+}
+
+.export-btn.backup-btn:hover:not(:disabled) {
+  background: #34d399;
+  color: #1a1a2e;
+}
+
+/* Export Modal Overlay */
+.export-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  padding: 20px;
+}
+
+.export-modal-content {
+  max-width: 480px;
+  width: 100%;
+  max-height: 90vh;
+  overflow-y: auto;
+  border-radius: 12px;
+}
+
 .sync-spinner {
   width: 14px;
   height: 14px;

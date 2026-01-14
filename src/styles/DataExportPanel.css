@@ -1,0 +1,415 @@
+/**
+ * DataExportPanel.css
+ * 
+ * Styles for the safe data export UI
+ */
+
+/* Main Panel */
+.export-panel {
+  background: var(--surface);
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+.export-panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  background: var(--surface-elevated);
+  border-bottom: 1px solid var(--border);
+}
+
+.export-panel-header h2 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.export-close-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 24px;
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+}
+
+.export-close-btn:hover {
+  color: var(--text-primary);
+}
+
+.export-panel-content {
+  padding: 20px;
+}
+
+/* Stats Section */
+.export-stats-section {
+  margin-bottom: 24px;
+}
+
+.export-stats-section h3 {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-muted);
+  margin: 0 0 12px 0;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.export-stats-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.export-stat {
+  background: var(--surface-elevated);
+  border-radius: 8px;
+  padding: 16px;
+  text-align: center;
+}
+
+.export-stat-value {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--primary);
+}
+
+.export-stat-label {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+
+/* Export Options */
+.export-options-section {
+  margin-bottom: 24px;
+}
+
+.export-options-section h3 {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-muted);
+  margin: 0 0 12px 0;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.export-option-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  background: var(--surface-elevated);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.export-option-card:hover {
+  border-color: var(--primary);
+  background: var(--surface);
+}
+
+.export-option-icon {
+  font-size: 32px;
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.export-option-info {
+  flex: 1;
+}
+
+.export-option-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+
+.export-option-desc {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.export-option-btn {
+  background: var(--primary);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  width: 40px;
+  height: 40px;
+  font-size: 18px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.export-option-btn:disabled {
+  background: var(--surface);
+  color: var(--text-muted);
+  cursor: not-allowed;
+}
+
+/* Progress Section */
+.export-progress-section {
+  background: var(--surface-elevated);
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 24px;
+}
+
+.export-progress-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.export-progress-stage {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.export-progress-count {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.export-progress-bar {
+  height: 8px;
+  background: var(--surface);
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 8px;
+}
+
+.export-progress-fill {
+  height: 100%;
+  background: var(--primary);
+  border-radius: 4px;
+  transition: width 0.3s ease;
+}
+
+.export-progress-message {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+/* Result Section */
+.export-result-section {
+  display: flex;
+  gap: 16px;
+  padding: 16px;
+  border-radius: 12px;
+  margin-bottom: 24px;
+}
+
+.export-result-section.success {
+  background: rgba(52, 211, 153, 0.1);
+  border: 1px solid rgba(52, 211, 153, 0.3);
+}
+
+.export-result-section.error {
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.export-result-icon {
+  font-size: 32px;
+}
+
+.export-result-info {
+  flex: 1;
+}
+
+.export-result-title {
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.export-result-section.success .export-result-title {
+  color: #34d399;
+}
+
+.export-result-section.error .export-result-title {
+  color: #ef4444;
+}
+
+.export-result-details {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.export-result-details p {
+  margin: 4px 0;
+}
+
+.export-result-details code {
+  background: var(--surface-elevated);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+}
+
+.export-result-hint {
+  margin-top: 12px;
+  font-size: 12px;
+  color: var(--text-muted);
+  padding: 8px;
+  background: var(--surface-elevated);
+  border-radius: 8px;
+}
+
+.export-result-error {
+  font-size: 13px;
+  color: #ef4444;
+}
+
+/* Info Section */
+.export-info-section {
+  background: var(--surface-elevated);
+  border-radius: 12px;
+  padding: 16px;
+}
+
+.export-info-section h3 {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-primary);
+  margin: 0 0 12px 0;
+}
+
+.export-info-section ul {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.export-info-section li {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+}
+
+.export-info-section li strong {
+  color: var(--text-primary);
+}
+
+/* Loading */
+.export-loading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-muted);
+  font-size: 14px;
+  padding: 16px 0;
+}
+
+/* Compact Mode */
+.export-panel-compact {
+  padding: 12px;
+  background: var(--surface-elevated);
+  border-radius: 8px;
+  margin: 8px;
+}
+
+.export-stats-compact {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-bottom: 12px;
+}
+
+.export-buttons-compact {
+  display: flex;
+  gap: 8px;
+}
+
+.export-btn-compact {
+  flex: 1;
+  padding: 10px 12px;
+  border: none;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.export-btn-compact.full {
+  background: var(--primary);
+  color: white;
+}
+
+.export-btn-compact.quick {
+  background: var(--surface);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+}
+
+.export-btn-compact:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.export-progress-compact {
+  margin-top: 12px;
+}
+
+.export-progress-bar-compact {
+  height: 4px;
+  background: var(--surface);
+  border-radius: 2px;
+  overflow: hidden;
+  margin-bottom: 4px;
+}
+
+.export-progress-fill-compact {
+  height: 100%;
+  background: var(--primary);
+  transition: width 0.3s ease;
+}
+
+.export-progress-text-compact {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.export-result-compact {
+  margin-top: 12px;
+  padding: 8px;
+  border-radius: 6px;
+  font-size: 12px;
+}
+
+.export-result-compact.success {
+  background: rgba(52, 211, 153, 0.1);
+  color: #34d399;
+}
+
+.export-result-compact.error {
+  background: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+}
+
+.export-empty {
+  font-size: 13px;
+  color: var(--text-muted);
+  text-align: center;
+  padding: 8px 0;
+}

@@ -131,6 +131,48 @@ const DEFAULT_MANIFEST: DatasetManifest = {
       category: 'corestack',
       enabled: true
     },
+    // CoreStack Sindhudurg-Kudal Coverage Boundary (vector layer)
+    {
+      id: 'corestack_sindhudurg_kudal_boundary',
+      title: 'CoreStack Coverage: Sindhudurg-Kudal',
+      type: 'vector',
+      source: { format: 'geojson', path: '/data/corestack/sindhudurg_kudal_boundary.geojson' },
+      style: { kind: 'polygon', colors: { default: '#00ff8844', outline: '#00cc66' } },
+      query: { mode: 'feature_at_point', fields: ['gp_name', 'block_name', 'area'] },
+      category: 'corestack',
+      enabled: true
+    },
+    // CoreStack LULC Vector Data for Sindhudurg-Kudal (ACTUAL POINT-SPECIFIC DATA)
+    {
+      id: 'corestack_sindhudurg_kudal_lulc',
+      title: 'LULC (CoreStack Sindhudurg-Kudal)',
+      type: 'vector',
+      source: { format: 'geojson', path: '/data/corestack/sindhudurg_kudal_lulc.geojson' },
+      style: { 
+        kind: 'choropleth', 
+        field: 'tree_fores',
+        colors: {
+          default: '#228B22',
+          'tree_forest': '#228B22',
+          'shrub_scrub': '#9ACD32',
+          'built-up': '#FF4500',
+          'barrenland': '#D2691E',
+          'cropland': '#FFD700'
+        }
+      },
+      query: { 
+        mode: 'feature_at_point', 
+        fields: [
+          'uid', 'area_in_ha', 
+          'tree_fores', 'tree_for_1', 'tree_for_2', 'tree_for_3', 'tree_for_4', 'tree_for_5', 'tree_for_6', 'tree_for_7',
+          'shrub_scru', 'barrenland', 'built-up_a', 
+          'doubly_cro', 'single_kha', 'triply_cro',
+          'k_water_ar', 'kr_water_a', 'krz_water_'
+        ] 
+      },
+      category: 'corestack',
+      enabled: true
+    },
     // District Urbanization
     {
       id: 'district_urbanization',
@@ -399,4 +441,36 @@ export class DatasetManager {
 
     return stats;
   }
+
+  /**
+   * Get values from a specific layer at a point (convenience method for single layer query)
+   */
+  async getValueAtPoint(
+    lat: number,
+    lon: number,
+    layerId: string
+  ): Promise<Record<string, unknown> | null> {
+    // Ensure layer data is loaded
+    if (!this.geojsonLayers.has(layerId)) {
+      const layer = this.getLayerById(layerId);
+      if (layer && layer.source.format === 'geojson') {
+        try {
+          const response = await fetch(layer.source.path);
+          if (response.ok) {
+            const geojson = await response.json() as GeoJSON.FeatureCollection;
+            this.geojsonLayers.set(layerId, geojson);
+            this.loadedData.set(layerId, geojson);
+            console.log(`[DatasetManager] Loaded ${layerId}: ${geojson.features?.length || 0} features`);
+          }
+        } catch (err) {
+          console.error(`[DatasetManager] Failed to load ${layerId}:`, err);
+          return null;
+        }
+      }
+    }
+
+    const values = await this.getValuesAtPoint(lat, lon, [layerId]);
+    return values[layerId] || null;
+  }
 }
+

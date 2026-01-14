@@ -1,7 +1,8 @@
-import { useEffect, useRef, useCallback, useImperativeHandle, forwardRef } from 'react';
+import { useEffect, useRef, useCallback, useImperativeHandle, forwardRef, useState } from 'react';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import type { DatasetLayer, LocationData } from '../types';
+import { coreStackLayerService, CoreStackLayer } from '../services/CoreStackLayerService';
 
 interface MapViewProps {
   center: [number, number];
@@ -92,6 +93,8 @@ const MapView = forwardRef<MapViewRef, MapViewProps>(({
   const map = useRef<maplibregl.Map | null>(null);
   const userMarker = useRef<maplibregl.Marker | null>(null);
   const accuracyCircle = useRef<string | null>(null);
+  const [, setCoreStackLayers] = useState<CoreStackLayer[]>([]);
+  const loadedCoreStackSources = useRef<Set<string>>(new Set());
 
   // Expose map methods to parent
   useImperativeHandle(ref, () => ({
@@ -441,10 +444,147 @@ const MapView = forwardRef<MapViewRef, MapViewProps>(({
     loadImageOverlays();
   }, [loadImageOverlays]);
 
+  // Load CoreStack layers dynamically from API
+  const loadCoreStackLayers = useCallback(async () => {
+    if (!map.current || !map.current.isStyleLoaded()) {
+      // Retry when style is loaded
+      map.current?.once('styledata', () => loadCoreStackLayers());
+      return;
+    }
+
+    // Load layers for known Western Ghats locations
+    const knownLocations = coreStackLayerService.getKnownLocations();
+    
+    for (const loc of knownLocations.slice(0, 3)) { // Start with first 3 to avoid overload
+      try {
+        const layers = await coreStackLayerService.getLayersForLocation(
+          loc.state,
+          loc.district,
+          loc.tehsil
+        );
+
+        if (layers.length > 0) {
+          setCoreStackLayers(prev => {
+            const existing = new Set(prev.map(l => l.id));
+            const newLayers = layers.filter(l => !existing.has(l.id));
+            return [...prev, ...newLayers];
+          });
+
+          // Load each layer's GeoJSON and add to map
+          for (const layer of layers) {
+            if (loadedCoreStackSources.current.has(layer.id)) continue;
+            if (layer.type !== 'vector') continue;
+
+            const geojson = await coreStackLayerService.fetchLayerGeoJSON(layer);
+            if (!geojson || !map.current) continue;
+
+            const sourceId = `corestack-${layer.id}`;
+            const layerId = `corestack-layer-${layer.id}`;
+
+            try {
+              // Add source
+              if (!map.current.getSource(sourceId)) {
+                map.current.addSource(sourceId, {
+                  type: 'geojson',
+                  data: geojson
+                });
+
+                // Determine geometry type from first feature
+                const firstFeature = geojson.features?.[0];
+                const geomType = firstFeature?.geometry?.type;
+
+                if (geomType === 'Polygon' || geomType === 'MultiPolygon') {
+                  // Add fill layer
+                  map.current.addLayer({
+                    id: layerId,
+                    type: 'fill',
+                    source: sourceId,
+                    paint: {
+                      'fill-color': getLayerColor(layer.name),
+                      'fill-opacity': 0.4
+                    }
+                  });
+                  // Add outline
+                  map.current.addLayer({
+                    id: `${layerId}-outline`,
+                    type: 'line',
+                    source: sourceId,
+                    paint: {
+                      'line-color': getLayerColor(layer.name),
+                      'line-width': 2
+                    }
+                  });
+                } else if (geomType === 'Point' || geomType === 'MultiPoint') {
+                  map.current.addLayer({
+                    id: layerId,
+                    type: 'circle',
+                    source: sourceId,
+                    paint: {
+                      'circle-radius': 6,
+                      'circle-color': getLayerColor(layer.name),
+                      'circle-stroke-width': 2,
+                      'circle-stroke-color': '#ffffff'
+                    }
+                  });
+                } else if (geomType === 'LineString' || geomType === 'MultiLineString') {
+                  map.current.addLayer({
+                    id: layerId,
+                    type: 'line',
+                    source: sourceId,
+                    paint: {
+                      'line-color': getLayerColor(layer.name),
+                      'line-width': 3
+                    }
+                  });
+                }
+
+                loadedCoreStackSources.current.add(layer.id);
+                console.log(`[MapView] Added CoreStack layer: ${layer.name} (${geojson.features?.length} features)`);
+              }
+            } catch (err) {
+              console.warn(`[MapView] Failed to add CoreStack layer ${layer.name}:`, err);
+            }
+          }
+        }
+      } catch (err) {
+        console.warn(`[MapView] Failed to load CoreStack layers for ${loc.district}:`, err);
+      }
+    }
+  }, []);
+
+  // Load CoreStack layers on mount
+  useEffect(() => {
+    // Delay to let map initialize
+    const timer = setTimeout(() => {
+      loadCoreStackLayers();
+    }, 2000);
+    return () => clearTimeout(timer);
+  }, [loadCoreStackLayers]);
+
   return <div ref={mapContainer} className="map-container" />;
 });
 
 MapView.displayName = 'MapView';
+
+// Helper: Get color based on layer name
+function getLayerColor(name: string): string {
+  const colorMap: Record<string, string> = {
+    'SOGE': '#2196F3',      // Blue for SOGE (slope/geology)
+    'Drainage': '#00BCD4',  // Cyan for drainage
+    'MWS': '#4CAF50',       // Green for micro-watersheds
+    'Settlement': '#FF5722', // Orange for settlements
+    'Waterbody': '#03A9F4',  // Light blue for water
+    'Cropping': '#8BC34A',   // Light green for crops
+    'default': '#9C27B0'     // Purple default
+  };
+  
+  for (const [key, color] of Object.entries(colorMap)) {
+    if (name.toLowerCase().includes(key.toLowerCase())) {
+      return color;
+    }
+  }
+  return colorMap.default;
+}
 
 // Helper to create a circle GeoJSON
 function createCircle(lng: number, lat: number, radiusMeters: number): GeoJSON.Feature {

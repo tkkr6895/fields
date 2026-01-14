@@ -437,8 +437,13 @@ class LocationDataService {
     
     try {
       const mwsResult = await coreStackService.getMWSIdByLatLon(lat, lon);
-      if (mwsResult && mwsResult.mws_id) {
-        const indicators = await coreStackService.getMWSKYLIndicators(mwsResult.mws_id).catch(() => []);
+      if (mwsResult && mwsResult.mws_id && mwsResult.state && mwsResult.district && mwsResult.tehsil) {
+        const indicators = await coreStackService.getMWSKYLIndicators(
+          mwsResult.state,
+          mwsResult.district,
+          mwsResult.tehsil,
+          mwsResult.mws_id
+        ).catch(() => []);
         
         const indicatorMap: Record<string, unknown> = {};
         for (const ind of indicators) {

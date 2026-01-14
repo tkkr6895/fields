@@ -4,6 +4,7 @@
  * PHASE 1: UI for safe, copy-only export of all observation data.
  * 
  * Provides:
+ * - ONE-TAP ZIP EXPORT with share options (email, GDrive, etc.)
  * - Full backup (observations + images)
  * - Quick backup (observations only)
  * - Clear progress feedback
@@ -11,7 +12,8 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { exportService, ExportProgress, ExportResult } from '../services/ExportService';
+import { exportService, ExportProgress, ExportResult, ShareMethod } from '../services/ExportService';
+import { Capacitor } from '@capacitor/core';
 import { db, dbReady } from '../db/database';
 import '../styles/DataExportPanel.css';
 
@@ -35,6 +37,7 @@ const DataExportPanel: React.FC<DataExportPanelProps> = ({ onClose, compact = fa
   });
   const [lastResult, setLastResult] = useState<ExportResult | null>(null);
   const [stats, setStats] = useState<DataStats>({ observations: 0, images: 0, loaded: false });
+  const isNative = Capacitor.isNativePlatform();
 
   // Load data stats on mount
   useEffect(() => {
@@ -64,6 +67,19 @@ const DataExportPanel: React.FC<DataExportPanelProps> = ({ onClose, compact = fa
     return unsubscribe;
   }, []);
 
+  // ONE-TAP EXPORT - creates ZIP and shares
+  const handleOneTapExport = async (method: ShareMethod = 'share') => {
+    setLastResult(null);
+    if (isNative) {
+      const result = await exportService.exportAndShare(method);
+      setLastResult(result);
+    } else {
+      // Web fallback - download ZIP directly
+      const result = await exportService.exportAndDownloadWeb();
+      setLastResult(result);
+    }
+  };
+
   const handleFullExport = async () => {
     setLastResult(null);
     const result = await exportService.exportAllData();
@@ -91,20 +107,28 @@ const DataExportPanel: React.FC<DataExportPanelProps> = ({ onClose, compact = fa
             <div className="export-stats-compact">
               📊 {stats.observations} observations, {stats.images} images
             </div>
+            {/* ONE-TAP EXPORT BUTTON */}
+            <button 
+              className="export-one-tap-btn"
+              onClick={() => handleOneTapExport('share')}
+              disabled={isExporting}
+            >
+              {isExporting ? '⏳ Creating ZIP...' : '📦 Export & Share ZIP'}
+            </button>
             <div className="export-buttons-compact">
               <button 
                 className="export-btn-compact full"
                 onClick={handleFullExport}
                 disabled={isExporting}
               >
-                {isExporting ? '⏳ Exporting...' : '💾 Full Backup'}
+                {isExporting ? '⏳' : '💾'} Full Backup
               </button>
               <button 
                 className="export-btn-compact quick"
                 onClick={handleQuickExport}
                 disabled={isExporting}
               >
-                📤 Quick Export
+                📤 Quick
               </button>
             </div>
             {isExporting && (
@@ -121,7 +145,7 @@ const DataExportPanel: React.FC<DataExportPanelProps> = ({ onClose, compact = fa
             {lastResult && (
               <div className={`export-result-compact ${lastResult.success ? 'success' : 'error'}`}>
                 {lastResult.success ? (
-                  <>✅ Exported {lastResult.observationCount} observations to {lastResult.exportPath}</>
+                  <>✅ Exported {lastResult.observationCount} observations</>
                 ) : (
                   <>❌ {lastResult.error}</>
                 )}
@@ -165,16 +189,63 @@ const DataExportPanel: React.FC<DataExportPanelProps> = ({ onClose, compact = fa
           )}
         </div>
 
-        {/* Export Options */}
+        {/* ONE-TAP EXPORT - Primary Action */}
+        <div className="export-one-tap-section">
+          <h3>⚡ One-Tap Export</h3>
+          <p className="export-one-tap-desc">
+            Creates a ZIP bundle with all data (JSON, GeoJSON, CSV, images) ready to share
+          </p>
+          
+          <button 
+            className="export-one-tap-primary"
+            onClick={() => handleOneTapExport('share')}
+            disabled={isExporting || stats.observations === 0}
+          >
+            {isExporting ? (
+              <>⏳ Creating ZIP...</>
+            ) : (
+              <>📦 Export ZIP & Share</>
+            )}
+          </button>
+
+          <div className="export-share-options">
+            <button 
+              className="export-share-btn email"
+              onClick={() => handleOneTapExport('email')}
+              disabled={isExporting || stats.observations === 0}
+              title="Share via Email"
+            >
+              ✉️ Email
+            </button>
+            <button 
+              className="export-share-btn gdrive"
+              onClick={() => handleOneTapExport('gdrive')}
+              disabled={isExporting || stats.observations === 0}
+              title="Share to Google Drive"
+            >
+              ☁️ Drive
+            </button>
+            <button 
+              className="export-share-btn download"
+              onClick={() => handleOneTapExport('download')}
+              disabled={isExporting || stats.observations === 0}
+              title="Save locally only"
+            >
+              💾 Save
+            </button>
+          </div>
+        </div>
+
+        {/* Export Options - Secondary */}
         <div className="export-options-section">
-          <h3>Export Options</h3>
+          <h3>Other Export Options</h3>
           
           <div className="export-option-card" onClick={!isExporting ? handleFullExport : undefined}>
             <div className="export-option-icon">💾</div>
             <div className="export-option-info">
-              <div className="export-option-title">Full Backup</div>
+              <div className="export-option-title">Full Backup (Unzipped)</div>
               <div className="export-option-desc">
-                Export all observations + images as JSON, GeoJSON, CSV
+                Export as separate files - JSON, GeoJSON, CSV, images
               </div>
             </div>
             <button 
@@ -190,7 +261,7 @@ const DataExportPanel: React.FC<DataExportPanelProps> = ({ onClose, compact = fa
             <div className="export-option-info">
               <div className="export-option-title">Quick Export (No Images)</div>
               <div className="export-option-desc">
-                Export observations only - faster, smaller file size
+                Observations only - faster, smaller file size
               </div>
             </div>
             <button 
@@ -210,6 +281,7 @@ const DataExportPanel: React.FC<DataExportPanelProps> = ({ onClose, compact = fa
                 {progress.stage === 'preparing' && '🔧 Preparing'}
                 {progress.stage === 'observations' && '📋 Observations'}
                 {progress.stage === 'images' && '🖼️ Images'}
+                {progress.stage === 'zipping' && '📦 Creating ZIP'}
                 {progress.stage === 'finalizing' && '✨ Finalizing'}
               </span>
               {progress.total > 0 && (
@@ -237,14 +309,16 @@ const DataExportPanel: React.FC<DataExportPanelProps> = ({ onClose, compact = fa
                 <div className="export-result-info">
                   <div className="export-result-title">Export Successful!</div>
                   <div className="export-result-details">
-                    <p>📁 Location: <code>{lastResult.exportPath}</code></p>
+                    {lastResult.zipPath && <p>📦 ZIP: <code>{lastResult.zipPath}</code></p>}
+                    {lastResult.exportPath && <p>📁 Location: <code>{lastResult.exportPath}</code></p>}
                     <p>📊 {lastResult.observationCount} observations, {lastResult.imageCount} images</p>
                     <p>📄 {lastResult.filesExported} files created</p>
                   </div>
-                  <div className="export-result-hint">
-                    💡 Find the files in your device's file manager under:<br/>
-                    <strong>Android/data/org.westernghats.fieldvalidator/files/Documents/</strong>
-                  </div>
+                  {isNative && (
+                    <div className="export-result-hint">
+                      💡 ZIP file saved and ready to share via email, Google Drive, or other apps
+                    </div>
+                  )}
                 </div>
               </>
             ) : (
@@ -266,7 +340,7 @@ const DataExportPanel: React.FC<DataExportPanelProps> = ({ onClose, compact = fa
             <li><strong>Safe:</strong> Data is COPIED, not moved or deleted</li>
             <li><strong>Complete:</strong> All observation fields, coordinates, notes, and dataset values</li>
             <li><strong>Multiple formats:</strong> JSON (complete), GeoJSON (for GIS), CSV (for Excel)</li>
-            <li><strong>Location:</strong> Saved to app's external Documents folder</li>
+            <li><strong>ZIP Bundle:</strong> One file to share via email or cloud storage</li>
           </ul>
         </div>
       </div>

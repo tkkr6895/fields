@@ -7,6 +7,14 @@
 
 const CORESTACK_BASE_URL = 'https://api-doc.core-stack.org/api/v1';
 
+// API response format (capitalized keys)
+interface AdminDetailsApiResponse {
+  State?: string;
+  District?: string;
+  Tehsil?: string;
+}
+
+// Our normalized format
 export interface AdminDetails {
   state_name?: string;
   state_code?: string;
@@ -150,20 +158,34 @@ class CoreStackService {
    * Get admin details by lat/lon
    */
   async getAdminDetailsByLatLon(lat: number, lon: number): Promise<AdminDetails> {
-    return this.request<AdminDetails>('/get_admin_details_by_latlon/', {
-      lat: lat.toString(),
-      lon: lon.toString()
+    const response = await this.request<AdminDetailsApiResponse>('/get_admin_details_by_latlon/', {
+      latitude: lat.toString(),
+      longitude: lon.toString()
     });
+    
+    // Transform API response to our normalized format
+    return {
+      state_name: response.State,
+      district_name: response.District,
+      tehsil_name: response.Tehsil
+    };
   }
 
   /**
    * Get MWS ID by lat/lon
    */
-  async getMWSIdByLatLon(lat: number, lon: number): Promise<{ mws_id: string }> {
-    return this.request('/get_mwsid_by_latlon/', {
-      lat: lat.toString(),
-      lon: lon.toString()
+  async getMWSIdByLatLon(lat: number, lon: number): Promise<{ mws_id: string; state?: string; district?: string; tehsil?: string }> {
+    const response = await this.request<{ uid: string; state?: string; district?: string; tehsil?: string }>('/get_mwsid_by_latlon/', {
+      latitude: lat.toString(),
+      longitude: lon.toString()
     });
+    
+    return {
+      mws_id: response.uid,
+      state: response.state,
+      district: response.district,
+      tehsil: response.tehsil
+    };
   }
 
   /**
@@ -183,18 +205,63 @@ class CoreStackService {
 
   /**
    * Get MWS KYL (Know Your Location) indicators
+   * Requires state, district, tehsil, and mws_id
    */
-  async getMWSKYLIndicators(mwsId: string): Promise<KYLIndicator[]> {
-    return this.request<KYLIndicator[]>('/get_mws_kyl_indicators/', {
+  async getMWSKYLIndicators(
+    state: string,
+    district: string,
+    tehsil: string,
+    mwsId: string
+  ): Promise<KYLIndicator[]> {
+    const response = await this.request<any[]>('/get_mws_kyl_indicators/', {
+      state,
+      district,
+      tehsil,
       mws_id: mwsId
     });
+    
+    // Transform the API response to our format
+    if (response && response.length > 0) {
+      const data = response[0];
+      const indicators: KYLIndicator[] = [];
+      
+      // Extract key indicators from the response
+      if (data.avg_precipitation !== undefined) {
+        indicators.push({ indicator_name: 'Avg Precipitation', value: data.avg_precipitation.toFixed(1), unit: 'mm' });
+      }
+      if (data.cropping_intensity_avg !== undefined) {
+        indicators.push({ indicator_name: 'Cropping Intensity', value: data.cropping_intensity_avg.toFixed(2), unit: '' });
+      }
+      if (data.avg_runoff !== undefined) {
+        indicators.push({ indicator_name: 'Avg Runoff', value: data.avg_runoff.toFixed(1), unit: 'mm' });
+      }
+      if (data.avg_single_cropped !== undefined) {
+        indicators.push({ indicator_name: 'Single Cropped', value: data.avg_single_cropped.toFixed(1), unit: '%' });
+      }
+      if (data.avg_double_cropped !== undefined) {
+        indicators.push({ indicator_name: 'Double Cropped', value: data.avg_double_cropped.toFixed(1), unit: '%' });
+      }
+      if (data.avg_number_dry_spell !== undefined) {
+        indicators.push({ indicator_name: 'Dry Spells', value: data.avg_number_dry_spell.toFixed(1), unit: 'days' });
+      }
+      if (data.total_nrega_assets !== undefined) {
+        indicators.push({ indicator_name: 'NREGA Assets', value: data.total_nrega_assets, unit: '' });
+      }
+      
+      return indicators;
+    }
+    
+    return [];
   }
 
   /**
    * Get MWS report URL
    */
-  async getMWSReportUrl(mwsId: string): Promise<{ url: string }> {
+  async getMWSReportUrl(state: string, district: string, tehsil: string, mwsId: string): Promise<{ url: string }> {
     return this.request('/get_mws_report/', {
+      state,
+      district,
+      tehsil,
       mws_id: mwsId
     });
   }
@@ -203,24 +270,32 @@ class CoreStackService {
    * Get generated layer URLs for a location
    */
   async getLayerUrls(
-    stateCode?: string,
-    districtCode?: string,
-    tehsilCode?: string
+    state: string,
+    district: string,
+    tehsil?: string
   ): Promise<LayerUrl[]> {
-    const params: Record<string, string> = {};
-    if (stateCode) params.state_code = stateCode;
-    if (districtCode) params.district_code = districtCode;
-    if (tehsilCode) params.tehsil_code = tehsilCode;
+    const params: Record<string, string> = { state, district };
+    if (tehsil) params.tehsil = tehsil;
     
-    return this.request<LayerUrl[]>('/get_generated_layer_urls/', params);
+    const response = await this.request<any[]>('/get_generated_layer_urls/', params);
+    
+    // Transform response to our format
+    return (response || []).map(item => ({
+      layer_name: item.layer_name,
+      url: item.layer_url,
+      type: (item.layer_type === 'vector' ? 'vector' : 'raster') as 'vector' | 'raster',
+      format: 'geojson'
+    }));
   }
 
   /**
    * Get tehsil data
    */
-  async getTehsilData(tehsilCode: string): Promise<TehsilData> {
+  async getTehsilData(state: string, district: string, tehsil: string): Promise<TehsilData> {
     return this.request<TehsilData>('/get_tehsil_data/', {
-      tehsil_code: tehsilCode
+      state,
+      district,
+      tehsil
     });
   }
 
@@ -228,14 +303,14 @@ class CoreStackService {
    * Get waterbodies by admin area
    */
   async getWaterbodiesByAdmin(
-    stateCode?: string,
-    districtCode?: string,
-    tehsilCode?: string
+    state?: string,
+    district?: string,
+    tehsil?: string
   ): Promise<WaterbodyData[]> {
     const params: Record<string, string> = {};
-    if (stateCode) params.state_code = stateCode;
-    if (districtCode) params.district_code = districtCode;
-    if (tehsilCode) params.tehsil_code = tehsilCode;
+    if (state) params.state = state;
+    if (district) params.district = district;
+    if (tehsil) params.tehsil = tehsil;
     
     return this.request<WaterbodyData[]>('/get_waterbodies_data_by_admin/', params);
   }
@@ -243,8 +318,11 @@ class CoreStackService {
   /**
    * Get waterbody data by UID
    */
-  async getWaterbodyData(uid: string): Promise<WaterbodyData> {
+  async getWaterbodyData(state: string, district: string, tehsil: string, uid: string): Promise<WaterbodyData> {
     return this.request<WaterbodyData>('/get_waterbody_data/', {
+      state,
+      district,
+      tehsil,
       uid
     });
   }
@@ -281,24 +359,31 @@ class CoreStackService {
       
       // Get MWS ID
       let mwsId: string | undefined;
+      let mwsState: string | undefined;
+      let mwsDistrict: string | undefined;
+      let mwsTehsil: string | undefined;
       let indicators: KYLIndicator[] | undefined;
       
       try {
         const mwsResult = await this.getMWSIdByLatLon(lat, lon);
         mwsId = mwsResult.mws_id;
+        mwsState = mwsResult.state || admin.state_name;
+        mwsDistrict = mwsResult.district || admin.district_name;
+        mwsTehsil = mwsResult.tehsil || admin.tehsil_name;
         
-        if (mwsId) {
-          indicators = await this.getMWSKYLIndicators(mwsId);
+        if (mwsId && mwsState && mwsDistrict && mwsTehsil) {
+          indicators = await this.getMWSKYLIndicators(mwsState, mwsDistrict, mwsTehsil, mwsId);
         }
       } catch {
         // MWS might not be available for all locations
+        console.log('[CoreStack] MWS data not available for this location');
       }
 
-      // Get layer URLs if we have district code
+      // Get layer URLs if we have admin names
       let layerUrls: LayerUrl[] | undefined;
-      if (admin.state_code && admin.district_code) {
+      if (admin.state_name && admin.district_name && admin.tehsil_name) {
         try {
-          layerUrls = await this.getLayerUrls(admin.state_code, admin.district_code);
+          layerUrls = await this.getLayerUrls(admin.state_name, admin.district_name, admin.tehsil_name);
         } catch {
           // Layers might not be available
         }
@@ -306,12 +391,12 @@ class CoreStackService {
 
       // Get nearby waterbodies
       let waterbodies: WaterbodyData[] | undefined;
-      if (admin.district_code) {
+      if (admin.state_name && admin.district_name) {
         try {
           waterbodies = await this.getWaterbodiesByAdmin(
-            admin.state_code,
-            admin.district_code,
-            admin.tehsil_code
+            admin.state_name,
+            admin.district_name,
+            admin.tehsil_name
           );
         } catch {
           // Waterbodies might not be available

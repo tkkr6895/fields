@@ -355,56 +355,59 @@ const FieldLog: React.FC<FieldLogProps> = ({ onGoToLocation }) => {
         </div>
       ) : (
         <>
-          {observations.map(obs => (
-            <div
-              key={obs.id}
-              className="log-entry"
-              onClick={() => handleObservationClick(obs)}
-            >
-              <div className="log-entry-thumb">
-                {obs.image?.blobId && imageUrls[obs.image.blobId] ? (
-                  <img src={imageUrls[obs.image.blobId]} alt="Observation" />
-                ) : (
-                  <div style={{ 
-                    display: 'flex', 
-                    alignItems: 'center', 
-                    justifyContent: 'center',
-                    height: '100%',
-                    fontSize: '24px',
-                    color: 'var(--text-muted)'
-                  }}>
-                    📷
+          {/* Scrollable observation list container */}
+          <div className="field-log-list">
+            {observations.map(obs => (
+              <div
+                key={obs.id}
+                className="log-entry"
+                onClick={() => handleObservationClick(obs)}
+              >
+                <div className="log-entry-thumb">
+                  {obs.image?.blobId && imageUrls[obs.image.blobId] ? (
+                    <img src={imageUrls[obs.image.blobId]} alt="Observation" />
+                  ) : (
+                    <div style={{ 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      justifyContent: 'center',
+                      height: '100%',
+                      fontSize: '24px',
+                      color: 'var(--text-muted)'
+                    }}>
+                      📷
+                    </div>
+                  )}
+                </div>
+                <div className="log-entry-info">
+                  <div className="log-entry-time">
+                    {formatTime(obs.timestamp)}
+                    <span className={`log-entry-validation ${obs.userValidation}`}>
+                      {getValidationLabel(obs.userValidation)}
+                    </span>
                   </div>
-                )}
+                  <div className="log-entry-location">
+                    📍 {obs.location.lat.toFixed(5)}, {obs.location.lon.toFixed(5)}
+                  </div>
+                  <div className="log-entry-datasets">
+                    {Object.keys(obs.datasetValues).length} layers queried
+                    {obs.notes && ` • ${obs.notes.substring(0, 30)}${obs.notes.length > 30 ? '...' : ''}`}
+                  </div>
+                  <button 
+                    className="go-to-location-btn"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onGoToLocation(obs.location.lat, obs.location.lon);
+                    }}
+                  >
+                    🗺️ View on Map
+                  </button>
+                </div>
               </div>
-              <div className="log-entry-info">
-                <div className="log-entry-time">
-                  {formatTime(obs.timestamp)}
-                  <span className={`log-entry-validation ${obs.userValidation}`}>
-                    {getValidationLabel(obs.userValidation)}
-                  </span>
-                </div>
-                <div className="log-entry-location">
-                  📍 {obs.location.lat.toFixed(5)}, {obs.location.lon.toFixed(5)}
-                </div>
-                <div className="log-entry-datasets">
-                  {Object.keys(obs.datasetValues).length} layers queried
-                  {obs.notes && ` • ${obs.notes.substring(0, 30)}${obs.notes.length > 30 ? '...' : ''}`}
-                </div>
-                <button 
-                  className="go-to-location-btn"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onGoToLocation(obs.location.lat, obs.location.lon);
-                  }}
-                >
-                  🗺️ View on Map
-                </button>
-              </div>
-            </div>
-          ))}
+            ))}
+          </div>
 
-          {/* Export Buttons */}
+          {/* Export Buttons - Fixed at bottom */}
           <div className="export-buttons">
             <button
               className={`export-btn sync-btn ${syncProgress.status === 'syncing' ? 'syncing' : ''}`}

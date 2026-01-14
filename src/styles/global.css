@@ -285,7 +285,7 @@ html, body, #root {
   bottom: 80px;
   left: 12px;
   right: 12px;
-  max-height: 50vh;
+  max-height: 70vh;
   background: var(--bg-secondary);
   border: 1px solid var(--border);
   border-radius: 16px 16px 8px 8px;
@@ -734,6 +734,17 @@ html, body, #root {
 /* Field Log */
 .field-log {
   padding-bottom: 16px;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+.field-log-list {
+  flex: 1;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 80px; /* Space for export buttons */
 }
 
 .field-log-filters {

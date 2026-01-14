@@ -5,7 +5,9 @@
  * https://api-doc.core-stack.org
  */
 
-const CORESTACK_BASE_URL = 'https://api-doc.core-stack.org/api/v1';
+// Use Vite proxy in development to avoid CORS issues
+const isDev = import.meta.env.DEV;
+const CORESTACK_BASE_URL = isDev ? '/api/corestack' : 'https://api-doc.core-stack.org/api/v1';
 
 // API response format (capitalized keys)
 interface AdminDetailsApiResponse {

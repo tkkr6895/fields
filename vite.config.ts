@@ -78,6 +78,20 @@ export default defineConfig({
   },
   server: {
     host: true,
-    port: 5173
+    port: 5173,
+    proxy: {
+      '/api/corestack': {
+        target: 'https://api-doc.core-stack.org',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/corestack/, '/api/v1'),
+        secure: true
+      },
+      '/api/geoserver': {
+        target: 'https://geoserver.core-stack.org:8443',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/geoserver/, '/geoserver'),
+        secure: true
+      }
+    }
   }
 });

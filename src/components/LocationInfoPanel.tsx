@@ -433,61 +433,64 @@ const LocationInfoPanel: React.FC<LocationInfoPanelProps> = ({ location, isOnlin
         <button className="close-btn" onClick={onClose}>✕</button>
       </div>
 
-      {/* Weather Card (if available) */}
-      {weatherData && (
-        <div className="weather-card">
-          <div className="weather-current">
-            <span className="weather-icon">
-              {weatherService.getWeatherIcon(weatherData.current.weatherCode, weatherData.current.isDay)}
-            </span>
-            <div className="weather-temp">
-              <span className="temp-value">{weatherData.current.temperature}°C</span>
-              <span className="temp-desc">{weatherData.current.weatherDescription}</span>
+      {/* Scrollable content area */}
+      <div className="panel-content">
+        {/* Weather Card (if available) */}
+        {weatherData && (
+          <div className="weather-card">
+            <div className="weather-current">
+              <span className="weather-icon">
+                {weatherService.getWeatherIcon(weatherData.current.weatherCode, weatherData.current.isDay)}
+              </span>
+              <div className="weather-temp">
+                <span className="temp-value">{weatherData.current.temperature}°C</span>
+                <span className="temp-desc">{weatherData.current.weatherDescription}</span>
+              </div>
             </div>
-          </div>
-          <div className="weather-details">
-            <span>💧 {weatherData.current.humidity}%</span>
-            <span>💨 {weatherData.current.windSpeed} km/h</span>
-            <span>🌧️ {weatherData.current.precipitation} mm</span>
-          </div>
-          {weatherData.forecast.length > 0 && (
-            <div className="weather-forecast">
-              {weatherData.forecast.slice(0, 3).map((day, i) => (
-                <div key={i} className="forecast-day">
-                  <span className="forecast-date">{new Date(day.date).toLocaleDateString('en-IN', { weekday: 'short' })}</span>
-                  <span className="forecast-icon">{weatherService.getWeatherIcon(day.weatherCode, true)}</span>
-                  <span className="forecast-temp">{day.tempMax.toFixed(0)}°/{day.tempMin.toFixed(0)}°</span>
-                </div>
-              ))}
+            <div className="weather-details">
+              <span>💧 {weatherData.current.humidity}%</span>
+              <span>💨 {weatherData.current.windSpeed} km/h</span>
+              <span>🌧️ {weatherData.current.precipitation} mm</span>
             </div>
-          )}
-        </div>
-      )}
-
-      {/* Data Sections */}
-      <div className="data-sections">
-        {Object.entries(sections).map(([key, section]) => (
-          <div key={key} className={`data-section ${expanded.has(key) ? 'expanded' : ''}`}>
-            <button 
-              className="section-header" 
-              onClick={() => toggleSection(key)}
-            >
-              <span className="section-icon">{section.icon}</span>
-              <span className="section-title">{section.title}</span>
-              {renderStatus(section.status)}
-              <span className="expand-icon">{expanded.has(key) ? '▼' : '▶'}</span>
-            </button>
-            {expanded.has(key) && (
-              <div className="section-content">
-                {section.status === 'loading' ? (
-                  <div className="loading-spinner">Loading data...</div>
-                ) : (
-                  renderData(section.data, key)
-                )}
+            {weatherData.forecast.length > 0 && (
+              <div className="weather-forecast">
+                {weatherData.forecast.slice(0, 3).map((day, i) => (
+                  <div key={i} className="forecast-day">
+                    <span className="forecast-date">{new Date(day.date).toLocaleDateString('en-IN', { weekday: 'short' })}</span>
+                    <span className="forecast-icon">{weatherService.getWeatherIcon(day.weatherCode, true)}</span>
+                    <span className="forecast-temp">{day.tempMax.toFixed(0)}°/{day.tempMin.toFixed(0)}°</span>
+                  </div>
+                ))}
               </div>
             )}
           </div>
-        ))}
+        )}
+
+        {/* Data Sections */}
+        <div className="data-sections">
+          {Object.entries(sections).map(([key, section]) => (
+            <div key={key} className={`data-section ${expanded.has(key) ? 'expanded' : ''}`}>
+              <button 
+                className="section-header" 
+                onClick={() => toggleSection(key)}
+              >
+                <span className="section-icon">{section.icon}</span>
+                <span className="section-title">{section.title}</span>
+                {renderStatus(section.status)}
+                <span className="expand-icon">{expanded.has(key) ? '▼' : '▶'}</span>
+              </button>
+              {expanded.has(key) && (
+                <div className="section-content">
+                  {section.status === 'loading' ? (
+                    <div className="loading-spinner">Loading data...</div>
+                  ) : (
+                    renderData(section.data, key)
+                  )}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* Action Buttons */}

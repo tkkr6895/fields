@@ -7,6 +7,10 @@
 
 import { coreStackService } from './CoreStackService';
 
+// Use Vite proxy in development to avoid CORS issues
+const isDev = import.meta.env.DEV;
+const CORESTACK_API_BASE = isDev ? '/api/corestack' : 'https://api-doc.core-stack.org/api/v1';
+
 export interface CoreStackLayer {
   id: string;
   name: string;
@@ -65,9 +69,9 @@ class CoreStackLayerService {
     try {
       console.log(`[CoreStackLayer] Fetching layers for ${state}/${district}/${tehsil}`);
       
-      // Call the API - note the API uses query params, not codes
+      // Call the API via proxy (to bypass CORS)
       const response = await fetch(
-        `https://api-doc.core-stack.org/api/v1/get_generated_layer_urls/?state=${encodeURIComponent(state)}&district=${encodeURIComponent(district)}&tehsil=${encodeURIComponent(tehsil)}`,
+        `${CORESTACK_API_BASE}/get_generated_layer_urls/?state=${encodeURIComponent(state)}&district=${encodeURIComponent(district)}&tehsil=${encodeURIComponent(tehsil)}`,
         {
           headers: {
             'Accept': 'application/json',

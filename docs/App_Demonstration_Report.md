@@ -1,225 +1,263 @@
 ---
 pdf_options:
   format: A4
-  margin: 20mm 15mm
+  margin: 15mm 12mm
   printBackground: true
 ---
 
 <style>
-  body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 11pt; line-height: 1.4; }
-  h1 { font-size: 24pt; margin-bottom: 5px; color: #1a5f2a; }
-  h2 { font-size: 16pt; margin-top: 20px; margin-bottom: 10px; color: #2d7a3e; border-bottom: 1px solid #ccc; padding-bottom: 5px; }
-  h3 { font-size: 13pt; margin-top: 15px; margin-bottom: 8px; }
-  img { max-width: 100%; height: auto; border: 1px solid #ddd; border-radius: 4px; margin: 10px 0; }
-  .img-small { max-width: 60%; display: block; margin: 10px auto; }
-  .img-medium { max-width: 80%; display: block; margin: 10px auto; }
-  table { width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 10pt; }
-  th, td { border: 1px solid #ddd; padding: 6px 8px; text-align: left; }
-  th { background-color: #f5f5f5; }
-  p { margin: 8px 0; }
-  .subtitle { font-size: 14pt; color: #666; margin-bottom: 20px; }
-  .caption { font-size: 9pt; color: #666; text-align: center; font-style: italic; margin-top: -5px; }
+  body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 10pt; line-height: 1.35; color: #333; }
+  h1 { font-size: 22pt; margin: 0 0 3px 0; color: #1a5f2a; }
+  h2 { font-size: 13pt; margin: 12px 0 6px 0; color: #2d7a3e; border-bottom: 1px solid #ccc; padding-bottom: 3px; page-break-after: avoid; }
+  h3 { font-size: 11pt; margin: 8px 0 4px 0; font-weight: 600; page-break-after: avoid; }
+  img { max-width: 100%; height: auto; border: 1px solid #ddd; border-radius: 3px; }
+  table { width: 100%; border-collapse: collapse; margin: 6px 0; font-size: 9pt; }
+  th, td { border: 1px solid #ddd; padding: 4px 6px; text-align: left; }
+  th { background-color: #f0f0f0; font-weight: 600; }
+  p { margin: 4px 0; }
+  .subtitle { font-size: 12pt; color: #555; margin-bottom: 10px; }
+  .caption { font-size: 8pt; color: #666; text-align: center; font-style: italic; margin: 2px 0 8px 0; }
+  .figure { page-break-inside: avoid; margin: 8px 0; }
+  .two-col { display: flex; gap: 12px; align-items: flex-start; }
+  .two-col > div { flex: 1; }
+  .two-col img { width: 100%; }
+  .summary-box { background: #f8f9fa; border-left: 3px solid #2d7a3e; padding: 8px 12px; margin: 8px 0; }
+  .key-list { margin: 4px 0; padding-left: 18px; }
+  .key-list li { margin: 2px 0; }
+  hr { border: none; border-top: 1px solid #ddd; margin: 10px 0; }
 </style>
 
 # Western Ghats Field Validator
-
 <p class="subtitle">Mobile Application for Ground-Truth Validation of Satellite-Derived Land Cover Classifications</p>
 
-## Executive Summary
+<div class="summary-box">
+<strong>Key Capabilities:</strong> Offline-first architecture | CoRE Stack API integration (8 endpoints) | Forest vs plantation classification | GPS-based observation capture | JSON/CSV data export
+</div>
 
-The Western Ghats Field Validator is a mobile-first progressive web application designed to validate satellite-derived land use and land cover (LULC) classifications through ground-truth field observations. The application integrates multiple authoritative geospatial data sources including CoRE Stack APIs, Google Dynamic World, and custom forest typology datasets to provide field researchers with actionable insights at any location.
+## 1. Overview
 
-**Key Capabilities:**
-- Offline-first architecture for remote field work without connectivity
-- Integration with CoRE Stack watershed data APIs (8 tested endpoints)
-- Forest typology layers distinguishing natural forests from plantations
-- GPS-based observation capture with photo documentation
-- Data export in JSON and CSV formats for analysis workflows
+The Western Ghats Field Validator is a mobile-first progressive web application that enables field researchers to validate satellite-derived LULC classifications through systematic ground-truth observations. It integrates CoRE Stack watershed APIs, Google Dynamic World, and custom forest typology datasets.
 
----
+<div class="two-col">
+<div class="figure">
+<img src="screenshots/01_main_view.png" alt="Main View">
+<p class="caption">Figure 1: Main interface with Western Ghats boundary</p>
+</div>
+<div class="figure">
+<img src="screenshots/02_layer_panel.png" alt="Layer Panel">
+<p class="caption">Figure 2: Layer panel with 31 map layers</p>
+</div>
+</div>
 
-## 1. Application Interface
-
-<img src="screenshots/01_main_view.png" class="img-medium" alt="Main View">
-<p class="caption">Figure 1: Main application interface showing the Western Ghats region</p>
-
-The application provides an intuitive map-based interface with:
-- Interactive map with multiple base layer options (street map, satellite imagery)
-- Real-time GPS location tracking shown as a blue indicator
-- Layer toggle showing count of active data layers
-- Bottom navigation for Map, Layers, Capture, Guide, and Log functions
+**Interface Features:** Interactive map with street/satellite base layers | GPS location tracking | Layer toggle with active count | Bottom navigation (Map, Layers, Capture, Guide, Log)
 
 ---
 
-## 2. Layer Management System
+## 2. Layer Management
 
-<img src="screenshots/02_layer_panel.png" class="img-medium" alt="Layer Panel">
-<p class="caption">Figure 2: Organized layer categories for systematic data access</p>
+The application organizes **31 map layers** and **15 data tables** across thematic categories:
 
-The application organizes **31 map layers** and **15 data tables** across six thematic categories:
-
-| Category | Description | Layer Count |
-|----------|-------------|-------------|
+| Category | Description | Layers |
+|----------|-------------|--------|
 | Forest Analysis | Plantation vs natural forest classification | 7 |
 | Land Cover Maps | Historical LULC from GLC-FCS30D (1985-2022) | 16 |
 | Urban Expansion | Built-up area change detection | 14 |
-| Dynamic World | Google Earth Engine LULC | 2 |
-| Boundaries | Administrative boundaries | 2 |
-| Watershed Data | Water balance and cropping intensity | 4 |
+| Dynamic World | Google Earth Engine LULC classification | 2 |
+| Boundaries | Administrative boundaries (District, WG) | 2 |
+| Watershed Data | Water balance, cropping intensity (CoRE Stack) | 4 |
 
 ---
 
 ## 3. Forest vs Plantation Classification
 
-<img src="screenshots/forest_vs_plantation.png" class="img-medium" alt="Forest vs Plantation">
-<p class="caption">Figure 3: Forest typology layer showing natural forest (green) vs plantations (purple/magenta)</p>
+<div class="figure">
+<img src="screenshots/forest_vs_plantation.png" alt="Forest vs Plantation" style="max-width: 75%; display: block; margin: 0 auto;">
+<p class="caption">Figure 3: Forest typology showing natural forest (green) vs plantations (purple/magenta)</p>
+</div>
 
 ### Classification Methodology
 
-The forest typology classification distinguishes natural forests from plantations using a multi-criteria analysis approach:
+The forest typology distinguishes natural forests from plantations using multi-criteria analysis:
 
-**Natural Forest Indicators:**
-- **Tree cover persistence**: Areas with consistent tree cover from 2000-2020 (Hansen Global Forest Change)
-- **Canopy structure**: Multi-layered, heterogeneous canopy heights typical of natural forests
-- **Spatial pattern**: Irregular boundaries and internal heterogeneity
-- **Historical land use**: No evidence of recent clearing or replanting cycles
+<div class="two-col">
+<div>
+<h3>Natural Forest Indicators</h3>
+<ul class="key-list">
+<li><strong>Tree cover persistence:</strong> Consistent cover 2000-2020 (Hansen GFC)</li>
+<li><strong>Canopy structure:</strong> Multi-layered, heterogeneous heights</li>
+<li><strong>Spatial pattern:</strong> Irregular boundaries, internal heterogeneity</li>
+<li><strong>Historical use:</strong> No recent clearing/replanting cycles</li>
+</ul>
+</div>
+<div>
+<h3>Plantation Indicators</h3>
+<ul class="key-list">
+<li><strong>Spectral signatures:</strong> Monoculture reflectance (rubber, teak, eucalyptus)</li>
+<li><strong>Row patterns:</strong> Regular geometric planting arrangements</li>
+<li><strong>Age uniformity:</strong> Even-aged stands from synchronized planting</li>
+<li><strong>Crop cycles:</strong> Periodic harvesting in time-series</li>
+</ul>
+</div>
+</div>
 
-**Plantation Indicators:**
-- **Spectral signatures**: Distinct reflectance patterns of monoculture species (rubber, teak, eucalyptus, oil palm)
-- **Row patterns**: Regular geometric planting arrangements detectable in high-resolution imagery
-- **Age uniformity**: Even-aged stands indicating synchronized planting
-- **Crop cycles**: Periodic harvesting patterns visible in time-series analysis
-
-This distinction is critical for biodiversity assessments, as natural forests support significantly higher species diversity compared to commercial plantations, despite both appearing as "forest" in conventional satellite classifications.
-
----
-
-## 4. Dynamic World LULC Integration
-
-<img src="screenshots/05_dynamic_world_layers.png" class="img-medium" alt="Dynamic World">
-<p class="caption">Figure 4: Dynamic World layer options for land cover analysis</p>
-
-The application integrates Google Dynamic World, providing near real-time land cover classification with 9 classes: Water, Trees, Grass, Flooded Vegetation, Crops, Shrub/Scrub, Built-up, Bare Ground, and Snow/Ice.
-
-Two layer options are available:
-- **Dynamic World (Live GEE)**: Real-time classification via Google Earth Engine API
-- **Dynamic World Regional (2018-2025)**: Pre-processed composite optimized for the Western Ghats
+This distinction is critical for biodiversity assessments: natural forests support significantly higher species diversity than commercial plantations, despite both appearing as "forest" in conventional satellite classifications.
 
 ---
 
-## 5. CoRE Stack API Integration
+## 4. Dynamic World and CoRE Stack Integration
 
-The application integrates with CoRE Stack APIs to provide watershed-level contextual data:
+<div class="two-col">
+<div class="figure">
+<img src="screenshots/05_dynamic_world_layers.png" alt="Dynamic World">
+<p class="caption">Figure 4: Dynamic World LULC options</p>
+</div>
+<div>
+<h3>Dynamic World LULC</h3>
+<p>Google's near real-time land cover with 9 classes: Water, Trees, Grass, Flooded Vegetation, Crops, Shrub/Scrub, Built-up, Bare Ground, Snow/Ice.</p>
+<p><strong>Options:</strong></p>
+<ul class="key-list">
+<li>Live GEE: Real-time via Earth Engine API</li>
+<li>Regional (2018-2025): Pre-processed composite</li>
+</ul>
+</div>
+</div>
+
+### CoRE Stack API Endpoints
 
 | Endpoint | Data Provided |
 |----------|--------------|
-| `get_admin_details_by_latlon` | State, District, Tehsil lookup |
-| `get_mwsid_by_latlon` | Micro-Watershed ID |
+| `get_admin_details_by_latlon` | State, District, Tehsil lookup from coordinates |
+| `get_mwsid_by_latlon` | Micro-Watershed ID for location |
 | `get_generated_layer_urls` | Available GIS layers for tehsil |
-| `get_tehsil_data` | Comprehensive tehsil statistics |
-| `get_mws_data` | Time series: ET, Runoff, Precipitation |
-| `get_mws_kyl_indicators` | Know Your Landscape indicators |
-| `get_waterbodies_data_by_admin` | Waterbody inventory |
+| `get_tehsil_data` | Comprehensive tehsil-level statistics |
+| `get_mws_data` | Time series: Evapotranspiration, Runoff, Precipitation |
+| `get_mws_kyl_indicators` | Know Your Landscape watershed indicators |
+| `get_waterbodies_data_by_admin` | Waterbody inventory for admin unit |
 | `get_mws_report` | MWS assessment report URL |
 
-All endpoints have been tested and documented in the included Jupyter notebook (`docs/notebooks/corestack_api_tested.ipynb`).
+All endpoints tested and documented in `docs/notebooks/corestack_api_tested.ipynb`.
 
 ---
 
-## 6. Field Observation Capture
+## 5. Field Observation Workflow
 
-<img src="screenshots/09_capture_observation.png" class="img-medium" alt="Capture">
-<p class="caption">Figure 5: Field observation capture interface with validation options</p>
-
-The observation workflow enables systematic ground-truth collection:
-
-1. **Photo capture** via device camera or gallery selection
-2. **Automatic GPS coordinates** with accuracy indicator
-3. **Layer values** at current location displayed for reference
-4. **Validation status** selection:
-   - Match: Satellite classification agrees with ground observation
-   - Mismatch: Classification differs from observed land cover
-   - Unclear: Unable to determine classification accuracy
-5. **Field notes** for additional documentation
+<div class="two-col">
+<div class="figure">
+<img src="screenshots/09_capture_observation.png" alt="Capture">
+<p class="caption">Figure 5: Observation capture interface</p>
+</div>
+<div>
+<h3>Capture Process</h3>
+<ol class="key-list">
+<li><strong>Photo capture:</strong> Camera or gallery selection</li>
+<li><strong>GPS coordinates:</strong> Automatic with accuracy indicator</li>
+<li><strong>Layer values:</strong> Active layer data at location</li>
+<li><strong>Validation status:</strong>
+  <ul>
+  <li>Match: Classification agrees with observation</li>
+  <li>Mismatch: Classification differs from ground truth</li>
+  <li>Unclear: Cannot determine accuracy</li>
+  </ul>
+</li>
+<li><strong>Field notes:</strong> Optional documentation</li>
+</ol>
+</div>
+</div>
 
 ---
 
-## 7. Field Log and Data Management
+## 6. Field Log and Data Export
 
-<img src="screenshots/logs.png" class="img-small" alt="Field Log">
-<p class="caption">Figure 6: Field log showing captured observations with filtering by validation status</p>
+<div class="two-col">
+<div class="figure">
+<img src="screenshots/logs.png" alt="Field Log">
+<p class="caption">Figure 6: Field log with validation filtering</p>
+</div>
+<div class="figure">
+<img src="screenshots/logs_export.png" alt="Export">
+<p class="caption">Figure 7: Data export options</p>
+</div>
+</div>
 
-The Field Log provides a chronological record of all captured observations with filtering capabilities by validation status (All, Match, Mismatch, Unclear).
-
-<img src="screenshots/logs_export.png" class="img-small" alt="Export">
-<p class="caption">Figure 7: Data export options for analysis workflows</p>
+**Field Log Features:**
+- Chronological observation list with photo thumbnails
+- Filter by validation status (All, Match, Mismatch, Unclear)
+- View observation details and location on map
 
 **Export Capabilities:**
-- **JSON format**: Complete observation data with metadata for programmatic analysis
-- **CSV format**: Tabular export compatible with spreadsheet applications and GIS software
-- **Offline storage**: All observations stored locally with automatic sync when connectivity is restored
+- **JSON:** Complete data with metadata for programmatic analysis
+- **CSV:** Tabular format for spreadsheets and GIS software
+- **Offline storage:** Local IndexedDB with sync on connectivity
 
 ---
 
-## 8. Additional Features
+## 7. Additional Features
 
-<img src="screenshots/11_satellite_view.png" class="img-medium" alt="Satellite">
-<p class="caption">Figure 8: Satellite imagery base map for visual verification</p>
+<div class="two-col">
+<div class="figure">
+<img src="screenshots/11_satellite_view.png" alt="Satellite">
+<p class="caption">Figure 8: Satellite base map for verification</p>
+</div>
+<div>
+<h3>Base Map Options</h3>
+<ul class="key-list">
+<li>OpenStreetMap: Navigation context</li>
+<li>ESRI World Imagery: Visual verification</li>
+<li>Dark mode: Low-light conditions</li>
+</ul>
 
-**Base Map Options:**
-- OpenStreetMap for navigation and context
-- ESRI World Imagery for visual ground-truth comparison
-- Dark mode for reduced eye strain in low-light conditions
-
-**Built-in Field Guide:**
-- Getting started instructions
-- Navigation and map controls
-- Layer management guide
-- Observation capture workflow
-- Offline mode operation
+<h3>Built-in Field Guide</h3>
+<ul class="key-list">
+<li>Getting started / GPS setup</li>
+<li>Navigation and map controls</li>
+<li>Layer management</li>
+<li>Observation capture workflow</li>
+<li>Offline mode operation</li>
+</ul>
+</div>
+</div>
 
 ---
 
-## 9. Technical Architecture
+## 8. Technical Architecture and Benefits
 
 | Component | Technology |
 |-----------|------------|
 | Frontend | React 18 + TypeScript + Vite |
 | Mapping | MapLibre GL JS |
-| Mobile Build | Capacitor (Android APK) |
-| Offline Storage | IndexedDB |
+| Mobile | Capacitor (Android APK) |
+| Storage | IndexedDB (offline-first) |
 | APIs | CoRE Stack, OSM Nominatim |
-| Deployment | Static hosting compatible |
+
+<div class="two-col">
+<div>
+<h3>For Field Researchers</h3>
+<ul class="key-list">
+<li>Works offline in remote areas</li>
+<li>Automatic GPS with accuracy</li>
+<li>Multiple layer comparison</li>
+</ul>
+</div>
+<div>
+<h3>For Conservation Organizations</h3>
+<ul class="key-list">
+<li>Systematic ground-truth validation</li>
+<li>Plantation vs forest distinction</li>
+<li>Standardized methodology</li>
+</ul>
+</div>
+</div>
 
 ---
 
-## 10. Benefits Summary
+## Resources
 
-**For Field Researchers:**
-- Works offline in remote areas without connectivity
-- Automatic GPS capture with accuracy indicators
-- Compare multiple data layers simultaneously
+| Resource | Location |
+|----------|----------|
+| Sample field observations | `field-data/recovered-observations/` |
+| CoRE Stack API notebook | `docs/notebooks/corestack_api_tested.ipynb` |
+| Source code | MIT Licensed on GitHub |
 
-**For Conservation Organizations:**
-- Systematic ground-truth validation of satellite classifications
-- Critical plantation vs natural forest distinction for biodiversity assessment
-- Standardized data collection methodology
-
-**For Data Scientists:**
-- Tested API integrations with documentation
-- Export formats (JSON, CSV) for analysis pipelines
-- Reproducible methodology with sample data
-
----
-
-## Sample Data and Resources
-
-- **Sample field observations**: `field-data/recovered-observations/`
-- **API testing notebook**: `docs/notebooks/corestack_api_tested.ipynb`
-- **Source code**: MIT Licensed, available on GitHub
-
----
-
-<p style="text-align: center; color: #666; font-size: 9pt; margin-top: 30px;">
+<p style="text-align: center; color: #888; font-size: 8pt; margin-top: 15px;">
 Western Ghats Field Validator v1.0.0 | January 2026 | MIT License
 </p>

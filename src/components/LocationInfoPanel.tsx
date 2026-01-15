@@ -5,10 +5,14 @@ import { coreStackService } from '../services/CoreStackService';
 import { coreStackLayerService } from '../services/CoreStackLayerService';
 import { dynamicWorldService } from '../services/DynamicWorldService';
 import { weatherService, WeatherData } from '../services/WeatherService';
+import { filterMeaningfulProperties, getPropertyLabel, formatPropertyValue } from '../config/westernGhatsLayers';
+import type { MapClickInfo } from './MapView';
 
 interface LocationInfoPanelProps {
   location: LocationData;
   isOnline: boolean;
+  activeLayerIds: string[];
+  mapClickInfo?: MapClickInfo | null;
   onClose: () => void;
 }
 
@@ -21,8 +25,9 @@ interface DataSection {
 
 const datasetManager = new DatasetManager();
 
-const LocationInfoPanel: React.FC<LocationInfoPanelProps> = ({ location, isOnline, onClose }) => {
+const LocationInfoPanel: React.FC<LocationInfoPanelProps> = ({ location, isOnline, activeLayerIds, mapClickInfo, onClose }) => {
   const [sections, setSections] = useState<Record<string, DataSection>>({
+    mapFeatures: { title: 'Map Features (Clicked)', icon: '🧩', status: 'loading', data: null },
     local: { title: 'Local Data', icon: '💾', status: 'loading', data: null },
     dynamicWorld: { title: 'Dynamic World (LULC)', icon: '🌍', status: 'loading', data: null },
     corestack: { title: 'CoreStack (Watershed)', icon: '💧', status: 'loading', data: null },
@@ -34,6 +39,7 @@ const LocationInfoPanel: React.FC<LocationInfoPanelProps> = ({ location, isOnlin
   // Reset sections when location changes
   useEffect(() => {
     setSections({
+      mapFeatures: { title: 'Map Features (Clicked)', icon: '🧩', status: 'loading', data: null },
       local: { title: 'Local Data', icon: '💾', status: 'loading', data: null },
       dynamicWorld: { title: 'Dynamic World (LULC)', icon: '🌍', status: 'loading', data: null },
       corestack: { title: 'CoreStack (Watershed)', icon: '💧', status: 'loading', data: null },
@@ -44,12 +50,66 @@ const LocationInfoPanel: React.FC<LocationInfoPanelProps> = ({ location, isOnlin
 
   useEffect(() => {
     const fetchAllData = async () => {
+      // 0. Rendered map features at the clicked point (CoreStack + local vector layers)
+      try {
+        const features = mapClickInfo?.features || [];
+        const data: Record<string, unknown> = {
+          '📍 Location': `${location.lat.toFixed(5)}°N, ${location.lon.toFixed(5)}°E`,
+          '🧩 Feature count': features.length
+        };
+
+        if (features.length === 0) {
+          data['ℹ️'] = 'No rendered vector features at this point (or layer hidden)';
+        } else {
+          features.slice(0, 15).forEach((f, idx) => {
+            const label = f.source === 'corestack'
+              ? `CoreStack: ${f.coreStackLayerId || f.mapLayerId}`
+              : `Layer: ${f.datasetLayerId || f.mapLayerId}`;
+            data[`── ${idx + 1}. ${label} ──`] = '';
+
+            const rawProps = f.properties || {};
+            // Filter to only show meaningful properties
+            const filteredProps = filterMeaningfulProperties(rawProps as Record<string, unknown>);
+            const keys = Object.keys(filteredProps).slice(0, 15);
+            
+            if (keys.length === 0) {
+              // Show a few raw props as fallback if filtering was too aggressive
+              const fallbackKeys = Object.keys(rawProps).filter(k => 
+                !k.startsWith('_') && rawProps[k] !== null && rawProps[k] !== ''
+              ).slice(0, 5);
+              if (fallbackKeys.length === 0) {
+                data['(no properties)'] = '';
+              } else {
+                fallbackKeys.forEach((k) => {
+                  data[getPropertyLabel(k)] = formatPropertyValue(k, rawProps[k]);
+                });
+              }
+            } else {
+              keys.forEach((k) => {
+                data[getPropertyLabel(k)] = formatPropertyValue(k, filteredProps[k]);
+              });
+            }
+          });
+        }
+
+        setSections(prev => ({
+          ...prev,
+          mapFeatures: { ...prev.mapFeatures, status: 'loaded', data }
+        }));
+      } catch (err) {
+        console.warn('Map features error:', err);
+        setSections(prev => ({
+          ...prev,
+          mapFeatures: { ...prev.mapFeatures, status: 'error', data: null }
+        }));
+      }
+
       // 1. Fetch local data (always available)
       try {
         await datasetManager.initialize();
-        const layers = datasetManager.getLayers();
-        const allLayerIds = layers.map(l => l.id);
-        const localData = await datasetManager.getSummaryAtPoint(location.lat, location.lon, allLayerIds);
+        const localIds = activeLayerIds.filter(id => !!datasetManager.getLayerById(id));
+        const layerIdsToQuery = localIds.length > 0 ? localIds : datasetManager.getLayers().map(l => l.id);
+        const localData = await datasetManager.getSummaryAtPoint(location.lat, location.lon, layerIdsToQuery);
         
         setSections(prev => ({
           ...prev,
@@ -63,103 +123,102 @@ const LocationInfoPanel: React.FC<LocationInfoPanelProps> = ({ location, isOnlin
         }));
       }
 
-      // 2. Fetch LULC data - try CoreStack first (actual point data), fall back to Dynamic World
+      // 2. Fetch LULC data - Dynamic World (POINT-SPECIFIC only)
       try {
-        await datasetManager.initialize();
-        
-        // Try to get CoreStack LULC data (actual polygon containing this point)
-        const coreStackLULC = await datasetManager.getValueAtPoint(
-          location.lat, 
-          location.lon, 
-          'corestack_sindhudurg_kudal_lulc'
-        );
-        
-        if (coreStackLULC && Object.keys(coreStackLULC).length > 0) {
-          // CoreStack has actual point-specific data!
-          const treeForest = parseFloat(coreStackLULC.tree_fores as string) || 0;
-          const shrub = parseFloat(coreStackLULC.shrub_scru as string) || 0;
-          const builtUp = parseFloat(coreStackLULC['built-up_a'] as string) || 0;
-          const barren = parseFloat(coreStackLULC.barrenland as string) || 0;
-          const doubleCrop = parseFloat(coreStackLULC.doubly_cro as string) || 0;
-          const singleCrop = parseFloat(coreStackLULC.single_kha as string) || 0;
-          const tripleCrop = parseFloat(coreStackLULC.triply_cro as string) || 0;
-          const waterKharif = parseFloat(coreStackLULC.k_water_ar as string) || 0;
-          const waterRabi = parseFloat(coreStackLULC.kr_water_a as string) || 0;
-          const areaHa = parseFloat(coreStackLULC.area_in_ha as string) || 0;
-          
-          const totalCrop = doubleCrop + singleCrop + tripleCrop;
-          const total = treeForest + shrub + builtUp + barren + totalCrop;
-          
+        const locationLabel = `${location.lat.toFixed(5)}°N, ${location.lon.toFixed(5)}°E`;
+
+        // Always show something useful, but never pretend regional stats are point-specific.
+        await dynamicWorldService.loadCachedData();
+        const regional = dynamicWorldService.getRegionalStats();
+
+        if (!isOnline) {
           setSections(prev => ({
             ...prev,
-            dynamicWorld: { 
-              title: 'LULC (CoreStack)', 
-              icon: '🛰️', 
-              status: 'loaded', 
+            dynamicWorld: {
+              ...prev.dynamicWorld,
+              status: 'offline',
               data: {
-                '✅ SOURCE': 'CoreStack Point-Specific Data',
-                '📍 Location': `${location.lat.toFixed(5)}°N, ${location.lon.toFixed(5)}°E`,
-                '📊 Polygon Area': `${areaHa.toFixed(1)} hectares`,
-                'Grid ID': coreStackLULC.uid || 'N/A',
-                '── Land Cover (ha) ──': '',
-                '🌳 Tree/Forest': `${treeForest.toFixed(1)} ha (${total > 0 ? (treeForest/total*100).toFixed(1) : 0}%)`,
-                '🌿 Shrub/Scrub': `${shrub.toFixed(1)} ha (${total > 0 ? (shrub/total*100).toFixed(1) : 0}%)`,
-                '🏘️ Built-up': `${builtUp.toFixed(1)} ha (${total > 0 ? (builtUp/total*100).toFixed(1) : 0}%)`,
-                '🏜️ Barren': `${barren.toFixed(1)} ha`,
-                '── Agriculture ──': '',
-                '🌾 Single Crop': `${singleCrop.toFixed(1)} ha`,
-                '🌾🌾 Double Crop': `${doubleCrop.toFixed(1)} ha`,
-                '🌾🌾🌾 Triple Crop': `${tripleCrop.toFixed(1)} ha`,
-                '── Water ──': '',
-                '💧 Kharif Season': `${waterKharif.toFixed(2)} ha`,
-                '💧 Rabi Season': `${waterRabi.toFixed(2)} ha`
+                '📍 Location': locationLabel,
+                'ℹ️ Status': 'Offline - live Dynamic World requires internet',
+                '── Regional context (NOT point-specific) ──': '',
+                ...(regional
+                  ? {
+                      'Region': 'Western Ghats (average)',
+                      'Year': regional.year,
+                      'Trees': `${regional.trees.toFixed(1)}%`,
+                      'Crops': `${regional.crops.toFixed(1)}%`,
+                      'Built': `${regional.built.toFixed(1)}%`,
+                      'Water': `${regional.water.toFixed(1)}%`
+                    }
+                  : { 'Regional': 'Not available locally' }),
+                '📶 Action': 'Connect to internet for live GEE point results'
+              }
+            }
+          }));
+        } else if (!dynamicWorldService.isPointDataAvailable()) {
+          setSections(prev => ({
+            ...prev,
+            dynamicWorld: {
+              ...prev.dynamicWorld,
+              status: 'offline',
+              data: {
+                '📍 Location': locationLabel,
+                'ℹ️ Status': 'Live Dynamic World not configured',
+                '── Regional context (NOT point-specific) ──': '',
+                ...(regional
+                  ? {
+                      'Region': 'Western Ghats (average)',
+                      'Year': regional.year,
+                      'Trees': `${regional.trees.toFixed(1)}%`,
+                      'Crops': `${regional.crops.toFixed(1)}%`,
+                      'Built': `${regional.built.toFixed(1)}%`,
+                      'Water': `${regional.water.toFixed(1)}%`
+                    }
+                  : { 'Regional': 'Not available locally' }),
+                '✅ Note': 'Regional stats are shown ONLY as context',
+                '🔧 Setup': 'Set VITE_DW_GEE_PROXY_URL and run the GEE proxy'
               }
             }
           }));
         } else {
-          // Fall back to Dynamic World regional data
-          await dynamicWorldService.loadCachedData();
-          const latestYear = new Date().getFullYear();
-          const dwStats = dynamicWorldService.getRegionalStats(latestYear) || dynamicWorldService.getRegionalStats();
-          
-          if (dwStats) {
-            const total = dwStats.water + dwStats.trees + dwStats.grass + 
-                         dwStats.floodedVegetation + dwStats.crops + 
-                         dwStats.shrubAndScrub + dwStats.built + dwStats.bare;
-            
-            const treesPct = total > 0 ? (dwStats.trees / total * 100).toFixed(1) : '0.0';
-            const cropsPct = total > 0 ? (dwStats.crops / total * 100).toFixed(1) : '0.0';
-            const builtPct = total > 0 ? (dwStats.built / total * 100).toFixed(1) : '0.0';
-            const shrubPct = total > 0 ? (dwStats.shrubAndScrub / total * 100).toFixed(1) : '0.0';
-            const waterPct = total > 0 ? (dwStats.water / total * 100).toFixed(1) : '0.0';
-            const grassPct = total > 0 ? (dwStats.grass / total * 100).toFixed(1) : '0.0';
-            
+          const pointData = await dynamicWorldService.fetchPointData(location.lat, location.lon);
+          if (!pointData) {
             setSections(prev => ({
               ...prev,
-              dynamicWorld: { 
-                ...prev.dynamicWorld, 
-                status: 'loaded', 
+              dynamicWorld: {
+                ...prev.dynamicWorld,
+                status: 'error',
                 data: {
-                  '⚠️ NOTICE': '⛔ REGIONAL DATA (not point-specific)',
-                  '📍 Your Click': `${location.lat.toFixed(4)}°N, ${location.lon.toFixed(4)}°E`,
-                  '📊 Coverage': 'Not in CoreStack area',
-                  'Year': dwStats.year,
-                  '── Regional Averages ──': '',
-                  '🌳 Trees': `${treesPct}%`,
-                  '🌾 Crops': `${cropsPct}%`,
-                  '🏘️ Built': `${builtPct}%`,
-                  '🌿 Shrub & Scrub': `${shrubPct}%`,
-                  '💧 Water': `${waterPct}%`,
-                  '🌱 Grass': `${grassPct}%`,
-                  '── For Point Data ──': '',
-                  '📍 Suggestion': 'Click in Sindhudurg-Kudal area (CoreStack coverage)'
+                  '📍 Location': locationLabel,
+                  '⚠️ Status': 'No live point result returned',
+                  'ℹ️ Note': 'Check the GEE proxy `/healthz` and proxy logs'
                 }
               }
             }));
           } else {
+            const topProbs = Object.entries(pointData.probabilities || {})
+              .sort((a, b) => Number(b[1]) - Number(a[1]))
+              .slice(0, 5)
+              .reduce<Record<string, unknown>>((acc, [k, v]) => {
+                acc[k] = `${(Number(v) * 100).toFixed(1)}%`;
+                return acc;
+              }, {});
+
             setSections(prev => ({
               ...prev,
-              dynamicWorld: { ...prev.dynamicWorld, status: 'error', data: null }
+              dynamicWorld: {
+                ...prev.dynamicWorld,
+                status: 'loaded',
+                data: {
+                  '📊 Source': 'Dynamic World (GEE live point)',
+                  '📍 Location': `${pointData.lat.toFixed(5)}°N, ${pointData.lon.toFixed(5)}°E`,
+                  '🗓️ Timestamp': pointData.timestamp,
+                  '🏷️ Class': pointData.landCoverClass,
+                  '🎯 Confidence': `${(pointData.confidence * 100).toFixed(1)}%`,
+                  '── Top probabilities ──': '',
+                  ...topProbs
+                }
+              }
             }));
           }
         }
@@ -294,7 +353,7 @@ const LocationInfoPanel: React.FC<LocationInfoPanelProps> = ({ location, isOnlin
     };
 
     fetchAllData();
-  }, [location, isOnline]);
+  }, [location, isOnline, activeLayerIds, mapClickInfo]);
 
   const toggleSection = (key: string) => {
     setExpanded(prev => {
@@ -314,20 +373,48 @@ const LocationInfoPanel: React.FC<LocationInfoPanelProps> = ({ location, isOnlin
     }
   };
 
+  // Helper to check if a value is meaningful (not null, undefined, empty, or just a dash)
+  const isValueMeaningful = (value: unknown): boolean => {
+    if (value === null || value === undefined) return false;
+    if (typeof value === 'string' && (value.trim() === '' || value.trim() === '-')) return false;
+    if (typeof value === 'number' && Number.isNaN(value)) return false;
+    if (Array.isArray(value) && value.length === 0) return false;
+    if (typeof value === 'object' && value !== null && Object.keys(value).length === 0) return false;
+    return true;
+  };
+
   const renderData = (data: Record<string, unknown> | null, sectionKey: string) => {
     if (!data) return <p className="no-data">No data available</p>;
     
+    // Filter out entries with null/empty values (but keep section headers that start with '──')
+    const filterMeaningfulEntries = (entries: [string, unknown][]): [string, unknown][] => {
+      return entries.filter(([key, value]) => {
+        // Keep section headers
+        if (key.startsWith('──') || key.includes('──')) return true;
+        // Keep entries with meaningful values
+        return isValueMeaningful(value);
+      });
+    };
+    
     // Special rendering for local data (grouped by layer)
     if (sectionKey === 'local') {
+      const meaningfulEntries = filterMeaningfulEntries(Object.entries(data));
+      if (meaningfulEntries.length === 0) {
+        return <p className="no-data">No data available at this location</p>;
+      }
+      
       return (
         <div className="data-grid local-data">
-          {Object.entries(data).map(([key, value]) => {
+          {meaningfulEntries.map(([key, value]) => {
             if (typeof value === 'object' && value !== null) {
+              const nestedEntries = filterMeaningfulEntries(Object.entries(value as Record<string, unknown>));
+              if (nestedEntries.length === 0) return null;
+              
               return (
                 <div key={key} className="layer-data">
                   <h4>{formatLayerName(key)}</h4>
                   <div className="layer-values">
-                    {Object.entries(value as Record<string, unknown>).map(([k, v]) => (
+                    {nestedEntries.map(([k, v]) => (
                       <div key={k} className="data-row">
                         <span className="data-label">{formatLabel(k)}</span>
                         <span className="data-value">{formatValue(v)}</span>
@@ -348,9 +435,14 @@ const LocationInfoPanel: React.FC<LocationInfoPanelProps> = ({ location, isOnlin
       );
     }
 
+    const meaningfulEntries = filterMeaningfulEntries(Object.entries(data));
+    if (meaningfulEntries.length === 0) {
+      return <p className="no-data">No data available at this location</p>;
+    }
+
     return (
       <div className="data-grid">
-        {Object.entries(data).map(([key, value]) => (
+        {meaningfulEntries.map(([key, value]) => (
           <div key={key} className="data-row">
             <span className="data-label">{formatLabel(key)}</span>
             <span className="data-value">{formatValue(value)}</span>

@@ -13,7 +13,6 @@
 
 import React, { useState, useEffect } from 'react';
 import { exportService, ExportProgress, ExportResult, ShareMethod } from '../services/ExportService';
-import { Capacitor } from '@capacitor/core';
 import { db, dbReady } from '../db/database';
 import '../styles/DataExportPanel.css';
 
@@ -37,7 +36,11 @@ const DataExportPanel: React.FC<DataExportPanelProps> = ({ onClose, compact = fa
   });
   const [lastResult, setLastResult] = useState<ExportResult | null>(null);
   const [stats, setStats] = useState<DataStats>({ observations: 0, images: 0, loaded: false });
-  const isNative = Capacitor.isNativePlatform();
+  const isNative = Boolean(
+    (globalThis as any)?.Capacitor &&
+    typeof (globalThis as any).Capacitor.isNativePlatform === 'function' &&
+    (globalThis as any).Capacitor.isNativePlatform()
+  );
 
   // Load data stats on mount
   useEffect(() => {

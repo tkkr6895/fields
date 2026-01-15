@@ -91,6 +91,11 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api\/geoserver/, '/geoserver'),
         secure: true
+      },
+      '/api/dw': {
+        target: 'http://localhost:8787',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/dw/, '')
       }
     }
   }

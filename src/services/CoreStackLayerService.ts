@@ -3,13 +3,34 @@
  * 
  * Fetches dynamic vector layers from CoreStack GeoServer and provides them for map display.
  * This is the core integration that enables CoreStack data visualization on the map.
+ * 
+ * Layers are filtered to only include those critical for Western Ghats field validation.
  */
 
 import { coreStackService } from './CoreStackService';
+import { isWesternGhatsCriticalLayer } from '../config/westernGhatsLayers';
 
 // Use Vite proxy in development to avoid CORS issues
 const isDev = import.meta.env.DEV;
 const CORESTACK_API_BASE = isDev ? '/api/corestack' : 'https://api-doc.core-stack.org/api/v1';
+
+// API key loaded from environment variable
+const DEFAULT_API_KEY = import.meta.env.VITE_CORESTACK_API_KEY || '';
+
+function getApiKeyForRequests(): string {
+  return coreStackService.getApiKey() || DEFAULT_API_KEY;
+}
+
+function proxyGeoserverUrl(url: string): string {
+  if (!url) return url;
+  if (!isDev) return url;
+
+  // Route GeoServer traffic through the Vite dev proxy to avoid CORS.
+  // Vite proxy: '/api/geoserver' -> 'https://geoserver.core-stack.org:8443/geoserver'
+  return url
+    .replace(/^https?:\/\/geoserver\.core-stack\.org:8443\/geoserver/i, '/api/geoserver')
+    .replace(/^https?:\/\/geoserver\.core-stack\.org\/geoserver/i, '/api/geoserver');
+}
 
 export interface CoreStackLayer {
   id: string;
@@ -43,6 +64,16 @@ class CoreStackLayerService {
   private isLoading = false;
   private loadError: string | null = null;
 
+  private normalizeIdPart(value: string): string {
+    return (value || '')
+      .toLowerCase()
+      .trim()
+      .replace(/\s+/g, '_')
+      .replace(/[^a-z0-9_]+/g, '_')
+      .replace(/_+/g, '_')
+      .replace(/^_+|_+$/g, '');
+  }
+
   /**
    * Get layers for a specific location (state/district/tehsil)
    */
@@ -75,7 +106,7 @@ class CoreStackLayerService {
         {
           headers: {
             'Accept': 'application/json',
-            'X-API-Key': coreStackService['apiKey'] || 'x0bXxURa.B9Qgfxd0aKxxJ8GIDHA5FCSIAc52hFgg'
+            'X-API-Key': getApiKeyForRequests()
           }
         }
       );
@@ -93,22 +124,41 @@ class CoreStackLayerService {
       console.log('[CoreStackLayer] API response:', data);
 
       // Transform API response to our layer format
-      const layers: CoreStackLayer[] = Array.isArray(data) ? data.map((item: any, index: number) => ({
-        id: `corestack_${state}_${district}_${tehsil}_${item.layer_name || index}`.toLowerCase().replace(/\s+/g, '_'),
-        name: item.layer_name || `Layer ${index + 1}`,
-        type: (item.layer_type || 'vector').toLowerCase() as 'vector' | 'raster',
-        url: item.layer_url || '',
-        styleUrl: item.style_url,
-        geeAssetPath: item.gee_asset_path,
-        version: item.layer_version || '1.0',
-        category: 'corestack',
-        state,
-        district,
-        tehsil
-      })) : [];
+      const allLayers = Array.isArray(data)
+        ? data.map((item: any, index: number) => {
+            const layerName = String(item.layer_name || `Layer ${index + 1}`);
+            const layerVersion = String(item.layer_version || '1.0');
+            const safeState = this.normalizeIdPart(state);
+            const safeDistrict = this.normalizeIdPart(district);
+            const safeTehsil = this.normalizeIdPart(tehsil);
+            const safeName = this.normalizeIdPart(layerName) || `layer_${index + 1}`;
+            const safeVersion = this.normalizeIdPart(layerVersion) || 'v1';
+
+            // IMPORTANT: Some tehsils return duplicate layer_name entries.
+            // Include version + index to guarantee uniqueness and avoid React key collisions.
+            const id = `corestack_${safeState}_${safeDistrict}_${safeTehsil}_${safeName}_${safeVersion}_${index}`;
+
+            return {
+              id,
+              name: layerName,
+              type: (item.layer_type || 'vector').toLowerCase() as 'vector' | 'raster',
+              url: item.layer_url || '',
+              styleUrl: item.style_url,
+              geeAssetPath: item.gee_asset_path,
+              version: layerVersion,
+              category: 'corestack' as const,
+              state,
+              district,
+              tehsil
+            };
+          })
+        : [];
+
+      // Filter to only include layers critical for Western Ghats field work
+      const layers: CoreStackLayer[] = allLayers.filter(layer => isWesternGhatsCriticalLayer(layer.name));
 
       layerCache.set(cacheKey, layers);
-      console.log(`[CoreStackLayer] Loaded ${layers.length} layers`);
+      console.log(`[CoreStackLayer] Loaded ${layers.length}/${allLayers.length} layers (filtered for WG critical layers)`);
       
       return layers;
     } catch (err) {
@@ -163,9 +213,10 @@ class CoreStackLayerService {
     }
 
     try {
-      console.log(`[CoreStackLayer] Fetching GeoJSON for ${layer.name} from ${layer.url}`);
+      const fetchUrl = proxyGeoserverUrl(layer.url);
+      console.log(`[CoreStackLayer] Fetching GeoJSON for ${layer.name} from ${fetchUrl}`);
       
-      const response = await fetch(layer.url, {
+      const response = await fetch(fetchUrl, {
         headers: {
           'Accept': 'application/json'
         }

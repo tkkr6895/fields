@@ -80,11 +80,11 @@ class CoreStackService {
   private apiKey: string | null = null;
   private isOnline: boolean = navigator.onLine;
 
-  // Hardcoded API key for testing - move to environment variable for production
-  private static readonly DEFAULT_API_KEY = 'x0bXxURa.B9Qgfxd0aKxxJ8GIDHA5FCSIAc52hFgg';
+  // API key loaded from environment variable or user settings
+  private static readonly DEFAULT_API_KEY = import.meta.env.VITE_CORESTACK_API_KEY || '';
 
   constructor() {
-    // Load API key from localStorage, fallback to hardcoded key for testing
+    // Load API key from localStorage, fallback to environment variable
     this.apiKey = localStorage.getItem('corestack_api_key') || CoreStackService.DEFAULT_API_KEY;
     
     window.addEventListener('online', () => this.isOnline = true);
@@ -107,6 +107,13 @@ class CoreStackService {
   }
 
   /**
+   * Get the currently configured API key (if any)
+   */
+  getApiKey(): string | null {
+    return this.apiKey;
+  }
+
+  /**
    * Check if service is available
    */
   isAvailable(): boolean {
@@ -125,7 +132,11 @@ class CoreStackService {
       throw new Error('API key not configured');
     }
 
-    const url = new URL(`${CORESTACK_BASE_URL}${endpoint}`);
+    // NOTE: In dev we use a relative base ("/api/corestack"), which requires an absolute base for URL().
+    const baseUrl = CORESTACK_BASE_URL.startsWith('http')
+      ? CORESTACK_BASE_URL
+      : `${window.location.origin}${CORESTACK_BASE_URL}`;
+    const url = new URL(`${baseUrl}${endpoint}`);
     Object.entries(params).forEach(([key, value]) => {
       url.searchParams.set(key, value);
     });
@@ -133,18 +144,40 @@ class CoreStackService {
     console.log(`[CoreStack] Requesting: ${endpoint}`, params);
 
     try {
+      const controller = new AbortController();
+      const timeoutMs = 15000;
+      const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
+
       const response = await fetch(url.toString(), {
         method: 'GET',
+        signal: controller.signal,
         headers: {
           'Accept': 'application/json',
           'X-API-Key': this.apiKey
         }
       });
 
+      window.clearTimeout(timeout);
+
       if (!response.ok) {
-        const error = await response.json().catch(() => ({ message: response.statusText }));
-        console.error(`[CoreStack] Error ${response.status}:`, error);
-        throw new Error(error.message || error.detail || `API error: ${response.status}`);
+        let errorBody: any = null;
+        try {
+          errorBody = await response.json();
+        } catch {
+          try {
+            errorBody = await response.text();
+          } catch {
+            errorBody = null;
+          }
+        }
+        console.error(`[CoreStack] Error ${response.status}:`, errorBody);
+
+        const message =
+          (errorBody && typeof errorBody === 'object' && (errorBody.message || errorBody.detail))
+            ? (errorBody.message || errorBody.detail)
+            : (typeof errorBody === 'string' && errorBody.trim() ? errorBody : response.statusText);
+
+        throw new Error(message || `API error: ${response.status}`);
       }
 
       const data = await response.json();

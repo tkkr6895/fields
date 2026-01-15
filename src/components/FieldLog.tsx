@@ -95,14 +95,35 @@ const FieldLog: React.FC<FieldLogProps> = ({ onGoToLocation }) => {
       mimeType = 'text/csv';
     }
 
-    // Download file
     const blob = new Blob([content], { type: mimeType });
+
+    // Prefer native share sheet on supported mobile browsers / Capacitor webview.
+    try {
+      const navAny = navigator as any;
+      const file = new File([blob], filename, { type: mimeType });
+      if (navAny?.share && navAny?.canShare?.({ files: [file] })) {
+        await navAny.share({
+          title: 'WG Field Validator Export',
+          text: `Exported observations (${format.toUpperCase()})`,
+          files: [file]
+        });
+        return;
+      }
+    } catch (e) {
+      console.warn('Share failed; falling back to download:', e);
+    }
+
+    // Download file (more reliable when the anchor is attached to DOM)
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
     a.download = filename;
+    a.rel = 'noopener';
+    document.body.appendChild(a);
     a.click();
-    URL.revokeObjectURL(url);
+    a.remove();
+    // Allow the click to initiate download before revoking.
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
   }, [observations]);
 
   // Sync observations with external services
@@ -152,21 +173,25 @@ const FieldLog: React.FC<FieldLogProps> = ({ onGoToLocation }) => {
           console.warn('Weather fetch failed:', e);
         }
 
-        // Dynamic World LULC - only regional data available
-        // Point-specific data requires GEE API integration
+        // Dynamic World LULC - POINT-SPECIFIC only (no regional placeholders)
         try {
           setSyncProgress(prev => ({ ...prev, message: `[${i + 1}/${observations.length}] Fetching land cover...` }));
-          // Note: Point data is NOT available - fetchPointData returns null
-          // We can only provide regional statistics
-          const regionalStats = dynamicWorldService.getRegionalStats();
-          if (regionalStats) {
-            enrichedData['dw_data_type'] = 'REGIONAL_AVERAGE';
-            enrichedData['dw_region'] = 'Western Ghats';
-            enrichedData['dw_year'] = regionalStats.year;
-            enrichedData['dw_trees_regional_pct'] = regionalStats.trees;
-            enrichedData['dw_crops_regional_pct'] = regionalStats.crops;
-            enrichedData['dw_built_regional_pct'] = regionalStats.built;
-            enrichedData['dw_note'] = 'Regional average - point-specific data requires GEE API integration';
+          if (dynamicWorldService.isPointDataAvailable()) {
+            const pointData = await dynamicWorldService.fetchPointData(lat, lon);
+            if (pointData) {
+              enrichedData['dw_data_type'] = 'POINT';
+              enrichedData['dw_source'] = 'Dynamic World (GEE live)';
+              enrichedData['dw_timestamp'] = pointData.timestamp;
+              enrichedData['dw_class'] = pointData.landCoverClass;
+              enrichedData['dw_confidence'] = pointData.confidence;
+              enrichedData['dw_probabilities'] = pointData.probabilities;
+            } else {
+              enrichedData['dw_data_type'] = 'UNAVAILABLE';
+              enrichedData['dw_note'] = 'Dynamic World point query returned no result';
+            }
+          } else {
+            enrichedData['dw_data_type'] = 'UNAVAILABLE';
+            enrichedData['dw_note'] = 'Dynamic World live mode not configured (no regional placeholders)';
           }
         } catch (e) {
           console.warn('Dynamic World fetch failed:', e);

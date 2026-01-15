@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import MapView, { MapViewRef } from './components/MapView';
+import MapView, { MapViewRef, CoreStackLayer, MapClickInfo } from './components/MapView';
 import Header from './components/Header';
 import BottomNav from './components/BottomNav';
 import MapControls from './components/MapControls';
@@ -13,6 +13,7 @@ import SpeciesGuide from './components/SpeciesGuide';
 import { useNetworkStatus } from './hooks/useNetworkStatus';
 import { DatasetManager } from './services/DatasetManager';
 import { rasterLayerService } from './services/RasterLayerService';
+import { tileLayerService } from './services/TileLayerService';
 import { GeoLocationService } from './services/GeoLocationService';
 import { db } from './db/database';
 import type { LocationData, Observation, DatasetLayer, DatasetValues } from './types';
@@ -29,7 +30,14 @@ function App() {
   const [zoom, setZoom] = useState(8);
   const [basemap, setBasemap] = useState<'dark' | 'satellite'>('dark');
   const [layers, setLayers] = useState<DatasetLayer[]>([]);
-  const [activeLayers, setActiveLayers] = useState<Set<string>>(new Set(['western_ghats_boundary']));
+  const [activeLayers, setActiveLayers] = useState<Set<string>>(() => {
+    const initial = new Set<string>(['western_ghats_boundary']);
+    if ((import.meta.env.VITE_DW_GEE_PROXY_URL || '').trim().length > 0) {
+      initial.add('dynamicworld_live');
+    }
+    return initial;
+  });
+  const [coreStackLayers, setCoreStackLayers] = useState<CoreStackLayer[]>([]);
   
   // Navigation state
   const [activeTab, setActiveTab] = useState<TabType>('map');
@@ -38,6 +46,7 @@ function App() {
   const [showSpecies, setShowSpecies] = useState(false);
   const [showLocationInfo, setShowLocationInfo] = useState(false);
   const [searchedLocation, setSearchedLocation] = useState<LocationData | null>(null);
+  const [lastClickInfo, setLastClickInfo] = useState<MapClickInfo | null>(null);
   
   // Location state
   const [currentLocation, setCurrentLocation] = useState<LocationData | null>(null);
@@ -66,12 +75,28 @@ function App() {
         
         // Load raster image overlay layers
         const rasterLayers = await rasterLayerService.getRasterLayers();
+
+        // Load raster XYZ tile layers (more reliable for large rasters)
+        const tileLayers = await tileLayerService.getTileLayers();
         
         // Combine all layers
-        const allLayers = [...csvLayers, ...rasterLayers];
+        const dynamicWorldLiveLayer: DatasetLayer = {
+          id: 'dynamicworld_live',
+          title: 'Dynamic World (Live GEE)',
+          type: 'raster',
+          source: { format: 'xyz', path: 'dynamicworld://live' },
+          style: { kind: 'image', opacity: 0.75 },
+          minZoom: 0,
+          maxZoom: 19,
+          description: 'Live Dynamic World LULC from Google Earth Engine (requires configured proxy)',
+          category: 'dynamicworld',
+          enabled: true
+        };
+
+        const allLayers = [...csvLayers, ...rasterLayers, ...tileLayers, dynamicWorldLiveLayer];
         setLayers(allLayers);
         
-        console.log(`Loaded ${csvLayers.length} CSV layers, ${rasterLayers.length} raster layers`);
+        console.log(`Loaded ${csvLayers.length} dataset layers, ${rasterLayers.length} image overlays, ${tileLayers.length} tile layers`);
       } catch (err) {
         console.error('Failed to load layers:', err);
       }
@@ -99,6 +124,20 @@ function App() {
   const handleMapMove = useCallback((newCenter: [number, number], newZoom: number) => {
     setCenter(newCenter);
     setZoom(newZoom);
+  }, []);
+
+  const handleCoreStackLayersLoaded = useCallback((layers: CoreStackLayer[]) => {
+    setCoreStackLayers(layers);
+  }, []);
+
+  const handleLoadCoreStackAtPoint = useCallback(async (lat: number, lon: number) => {
+    if (!mapRef.current) return;
+    await mapRef.current.loadCoreStackAtPoint(lat, lon);
+  }, []);
+
+  const handleLoadCoreStackByAdmin = useCallback(async (state: string, district: string, tehsil: string) => {
+    if (!mapRef.current) return;
+    await mapRef.current.loadCoreStackForAdmin(state, district, tehsil);
   }, []);
 
   const handleLayerToggle = useCallback((layerId: string) => {
@@ -168,9 +207,10 @@ function App() {
   }, []);
 
   // Handle map click to get info for that location
-  const handleMapClick = useCallback((lat: number, lon: number) => {
+  const handleMapClick = useCallback((lat: number, lon: number, info?: MapClickInfo) => {
     const loc: LocationData = { lat, lon, accuracy: 0 };
     setSearchedLocation(loc);
+    setLastClickInfo(info || null);
     setShowLocationInfo(true);
   }, []);
 
@@ -212,6 +252,11 @@ function App() {
             activeLayers={activeLayers}
             onToggle={handleLayerToggle}
             onClose={() => setActiveTab('map')}
+            coreStackLayers={coreStackLayers}
+            mapCenter={{ lat: center[1], lon: center[0] }}
+            selectedLocation={searchedLocation ? { lat: searchedLocation.lat, lon: searchedLocation.lon } : undefined}
+            onLoadCoreStackAtPoint={handleLoadCoreStackAtPoint}
+            onLoadCoreStackByAdmin={handleLoadCoreStackByAdmin}
           />
         );
       case 'protocols':
@@ -277,6 +322,7 @@ function App() {
           currentLocation={currentLocation}
           onMapMove={handleMapMove}
           onMapClick={handleMapClick}
+          onCoreStackLayersLoaded={handleCoreStackLayersLoaded}
         />
         
         {/* Map Controls */}
@@ -350,6 +396,8 @@ function App() {
           key={`${searchedLocation.lat}-${searchedLocation.lon}`}
           location={searchedLocation}
           isOnline={isOnline}
+          activeLayerIds={[...activeLayers]}
+          mapClickInfo={lastClickInfo}
           onClose={() => setShowLocationInfo(false)}
         />
       )}

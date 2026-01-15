@@ -1,273 +1,275 @@
-# WG Field Validator
+# Field Validator
 
-**Offline-first Field Validation App for Western Ghats LULC**
+A mobile-first field data collection application for validating and ground-truthing Land Use/Land Cover (LULC) geospatial datasets. Built for offline-first operation with seamless integration of CoRE Stack APIs and Google Earth Engine Dynamic World data.
 
-A mobile-first, dark-themed app for field validation of Land Use / Land Cover datasets in the Western Ghats region. Works completely offline with preloaded datasets.
+## Overview
 
-## 📱 Download APK (Easiest Method)
+Field Validator enables practitioners, researchers, and community workers to collect ground-truth observations for LULC datasets in the field. The application is designed for challenging connectivity environments, functioning fully offline while providing enhanced capabilities when connected to the internet.
 
-### From GitHub Releases
+### Key Capabilities
 
-1. Go to the [Releases page](../../releases)
-2. Download the latest `app-debug.apk`
-3. On your Android phone:
-   - Enable "Install from unknown sources" in Settings
-   - Open the downloaded APK file
-   - Tap "Install"
-4. Open the app and start validating!
+- **Offline-First Architecture**: All core functionality works without internet connectivity. Preloaded basemaps, cached layers, and local storage ensure field teams can work in remote areas.
 
-> **Security Note:** The APK contains no API keys or credentials. Your CoreStack API key (if needed) is entered in the app settings and stored only on your device. See [SECURITY.md](SECURITY.md) for details.
+- **CoRE Stack Integration**: Live access to CoRE Stack's comprehensive geospatial layers including watershed data, waterbodies, cropping patterns, and socio-ecological indicators.
 
----
+- **Dynamic World LULC**: Real-time land cover classification from Google Earth Engine's Dynamic World dataset, providing 10m resolution class labels and confidence scores.
 
-## 🔧 Build from Source
+- **Field Observation Workflow**: Structured data collection with GPS coordinates, photographs, land cover classification, and field notes. Observations sync when connectivity is restored.
+
+- **Cross-Platform Deployment**: Runs as a Progressive Web App (PWA) in any modern browser, or as a native Android application via Capacitor.
+
+## Architecture
+
+The application is built with:
+
+- **Frontend**: React 18 with TypeScript, MapLibre GL for mapping, TailwindCSS for styling
+- **Build System**: Vite for fast development and optimized production builds
+- **Mobile**: Capacitor for native Android packaging with camera, GPS, and filesystem access
+- **Backend Proxy**: Node.js Express server for Google Earth Engine authentication (required only for Dynamic World features)
+
+## Installation
 
 ### Prerequisites
-- Node.js 18+ installed
-- npm or pnpm
 
-### Installation
+- Node.js 18 or higher
+- npm or pnpm package manager
+- Android Studio (for APK builds)
+- A CoRE Stack API key (obtain from [core-stack.org/use-apis](https://core-stack.org/use-apis/))
 
-```powershell
-# Navigate to the app directory
-cd field-validator-app
+### Setup
 
-# Install dependencies
+1. Clone the repository:
+
+```bash
+git clone https://github.com/tkkr6895/fields.git
+cd fields/field-validator-app
+```
+
+2. Install dependencies:
+
+```bash
 npm install
+```
 
-# Prepare datasets from workspace
-npm run prepare-data
+3. Configure environment variables:
 
-# Start development server
+```bash
+cp .env.example .env
+```
+
+Edit `.env` and add your credentials:
+
+```
+VITE_CORESTACK_API_KEY=your_api_key_here
+GEE_PROJECT=your_gee_project_id
+PORT=8787
+```
+
+4. Start the development server:
+
+```bash
 npm run dev
 ```
 
-The app will be available at `http://localhost:5173`
+The application will be available at `http://localhost:5173`
 
-### Build APK Locally
+### Running with Dynamic World Support
 
-Requires Java 17+ and Android SDK:
+To enable live Dynamic World data from Google Earth Engine:
 
-```powershell
-# Build web app
+1. Authenticate with Earth Engine CLI:
+
+```bash
+earthengine authenticate
+```
+
+2. Start both servers:
+
+```bash
+npm run dev:full
+```
+
+This launches the Vite development server and the Earth Engine proxy simultaneously.
+
+## Download Pre-Built APK
+
+Pre-built APKs are available from the [Releases](../../releases) page. To install:
+
+1. Download the latest `app-debug.apk`
+2. On your Android device, enable "Install from unknown sources" in Settings
+3. Open the downloaded APK and tap Install
+4. Launch the app and configure your API key in Settings
+
+## Building for Production
+
+### Web Application
+
+```bash
 npm run build
+```
 
-# Sync to Android
+Production assets are generated in the `dist/` directory.
+
+### Android APK
+
+Requires Android SDK and Java 17+:
+
+```bash
+npm run build
 npm run android:sync
-
-# Build APK (in android folder)
 cd android
 ./gradlew assembleDebug
 ```
 
-APK will be at `android/app/build/outputs/apk/debug/app-debug.apk`
+The APK is generated at `android/app/build/outputs/apk/debug/app-debug.apk`
 
-### Production Build (Web)
+### Automated Builds
 
-```powershell
-# Build for production
-npm run build
+The repository includes GitHub Actions workflows that automatically build and publish APKs on each push to the main branch.
 
-# Preview production build locally
-npm run preview
-```
+## Usage
 
-The production build will be in the `dist/` folder.
+### Basic Workflow
 
-## 📱 Features
+1. **Open the Application**: Launch from browser or installed APK
+2. **Configure API Key**: Enter your CoRE Stack API key in Settings (first use only)
+3. **Navigate to Location**: Pan and zoom to your field site, or use the GPS locate button
+4. **Toggle Layers**: Use the layer panel to enable relevant basemaps and data layers
+5. **Click for Information**: Tap any location to view CoRE Stack data and Dynamic World classification
+6. **Record Observation**: Use the observation panel to capture ground-truth data with photos
+7. **Sync Data**: Observations are stored locally and sync when connectivity is available
 
-### Method 1: Via Browser (Recommended)
-1. Open the app URL in Chrome on Android
-2. Tap the menu (⋮) → "Add to Home screen"
-3. The app will install as a standalone PWA
+### Layer Categories
 
-### Method 2: Via Local Server
-1. Build the app: `npm run build`
-2. Serve the `dist/` folder using any static server:
-   ```powershell
-   npx serve dist
-   ```
-3. Access from your phone and install
+| Category | Description |
+|----------|-------------|
+| Basemaps | OpenStreetMap, satellite imagery, terrain |
+| Boundaries | Administrative boundaries, watershed delineations |
+| Land Cover | Dynamic World live classification, historical LULC datasets |
+| Water Resources | Waterbodies, drainage networks, surface water extent |
+| Vegetation | Tree cover, cropping patterns, vegetation indices |
+| Infrastructure | NREGA assets, settlements, roads |
 
-## 📊 Available Datasets
+### Offline Mode
 
-The app is preconfigured to use datasets from your Western Ghats workspace:
+When offline, the application:
 
-### Boundaries
-- **Western Ghats Boundary** - Full WG region outline
-- **Dakshina Kannada District** - Focus area boundary
+- Displays cached map tiles and layer data
+- Stores observations in local IndexedDB storage
+- Queues photos for later upload
+- Provides visual indicators of connectivity status
 
-### LULC Layers (GLC-FCS30D)
-- **LULC Composition** - Land cover classes (1987-2010)
-- **Tree Cover** - Forest/tree statistics by year
-- **Built Area (GLC)** - Urbanization from GLC dataset
-- **Built Area (Dynamic World)** - High-res built area (2018-2025)
+## Sample Field Data
 
-### Forest Data
-- **Forest Typology** - Forest classification
-- **Regional Forest Comparison** - Cross-region analysis
+Sample observations collected during field validation are available in the repository:
 
-### CoreStack Data
-- **CoreStack Blocks** - Available block-level data
-- **District Coverage** - Which WG districts have CoreStack data
-- **Cropping Intensity** - Agricultural metrics
-- **Water Balance** - Watershed hydrology
+**[field-data/recovered-observations](https://github.com/tkkr6895/fields/tree/main/field-data/recovered-observations)**
 
-## 🔧 Adding New Datasets
+These samples demonstrate the data structure and can be used as reference for analysis workflows.
 
-### Step 1: Add source file to workspace
+## API Integration
 
-Place your GeoJSON, CSV, or other data file in the appropriate `outputs/` folder.
+### CoRE Stack APIs
 
-### Step 2: Update the prepare script
+The application integrates with the following CoRE Stack endpoints:
 
-Edit `scripts/prepare-datasets.js` to add your file:
+| Endpoint | Description |
+|----------|-------------|
+| `/get_admin_details_by_latlon/` | Administrative location for coordinates |
+| `/get_generated_layer_urls/` | Available GIS layers for a tehsil |
+| `/get_tehsil_data/` | Comprehensive tehsil-level datasets |
+| `/get_mws_data/` | Micro-watershed time series data |
+| `/get_mws_kyl_indicators/` | Know Your Landscape indicators |
+| `/get_waterbodies_data_by_admin/` | Waterbodies inventory |
 
-```javascript
-const DATASET_SOURCES = {
-  // Add to appropriate category
-  lulc: [
-    // ... existing files
-    {
-      src: 'outputs/your_new_dataset.csv',
-      dest: 'lulc/your_new_dataset.csv'
-    }
-  ]
-};
-```
+API documentation: [api-doc.core-stack.org](https://api-doc.core-stack.org/)
 
-### Step 3: Update the manifest
+A standalone Python notebook demonstrating CoRE Stack API integration is available at `docs/notebooks/corestack_api_tested.ipynb`.
 
-Edit `public/data/dataset-manifest.json` to add layer definition:
+### Google Earth Engine
 
-```json
-{
-  "id": "your_new_layer",
-  "title": "Your New Layer",
-  "type": "csv",
-  "source": { "format": "csv", "path": "/data/lulc/your_new_dataset.csv" },
-  "style": { "kind": "categorical", "field": "main_field" },
-  "query": { "mode": "summary", "fields": ["field1", "field2"] },
-  "category": "lulc",
-  "enabled": true
-}
-```
+Dynamic World integration requires:
 
-### Step 4: Rebuild
+- An active Earth Engine account
+- A registered Cloud Project with Earth Engine API enabled
+- Either CLI authentication or a service account
 
-```powershell
-npm run prepare-data
-npm run build
-```
-
-## 🗂️ Project Structure
+## Project Structure
 
 ```
 field-validator-app/
-├── public/
-│   ├── data/                    # Static datasets
-│   │   ├── boundaries/          # GeoJSON boundaries
-│   │   ├── lulc/               # LULC CSV data
-│   │   ├── forest/             # Forest analysis
-│   │   ├── corestack/          # CoreStack exports
-│   │   └── dataset-manifest.json
-│   ├── pwa-192x192.png         # PWA icons
-│   └── pwa-512x512.png
-├── scripts/
-│   └── prepare-datasets.js      # Data preparation script
 ├── src/
-│   ├── components/
-│   │   ├── MapView.tsx         # MapLibre map
-│   │   ├── CaptureModal.tsx    # Photo capture
-│   │   ├── FieldLog.tsx        # Observation list
-│   │   ├── LayerPanel.tsx      # Layer toggles
-│   │   ├── LocationSummary.tsx # Location info
-│   │   └── ...
-│   ├── db/
-│   │   └── database.ts         # Dexie IndexedDB
-│   ├── services/
-│   │   ├── DatasetManager.ts   # Data loading
-│   │   ├── GeoLocationService.ts
-│   │   └── ImageService.ts     # EXIF extraction
-│   ├── styles/
-│   │   └── global.css          # Dark theme
-│   ├── types/
-│   │   └── index.ts
-│   ├── App.tsx
-│   └── main.tsx
-├── package.json
-├── tsconfig.json
-└── vite.config.ts
+│   ├── components/        # React UI components
+│   ├── services/          # API clients and business logic
+│   ├── config/            # Layer configuration and settings
+│   ├── types/             # TypeScript type definitions
+│   └── utils/             # Utility functions
+├── server/                # Earth Engine proxy server
+├── public/                # Static assets and datasets
+├── android/               # Capacitor Android project
+└── docs/
+    └── notebooks/         # API integration examples
 ```
 
-## 🎯 Features
+## Configuration
 
-### Map-First UI
-- Dark-themed MapLibre GL map
-- Basemap toggle (Map/Satellite)
-- Auto-hiding controls
-- GPS location with accuracy ring
+### Environment Variables
 
-### Offline Operation
-- Service Worker caches app shell
-- IndexedDB stores observations
-- Local dataset storage
-- Works without internet
+| Variable | Description | Required |
+|----------|-------------|----------|
+| `VITE_CORESTACK_API_KEY` | CoRE Stack API key | Yes |
+| `GEE_PROJECT` | Google Earth Engine project ID | For Dynamic World |
+| `PORT` | Proxy server port (default: 8787) | No |
 
-### Field Capture
-- 📷 Camera capture with EXIF extraction
-- 📍 GPS coordinates from device or photo
-- 📊 Instant dataset lookup at location
-- ✅ One-tap validation (Match/Mismatch/Unclear)
+### Layer Filtering
 
-### Field Log
-- Chronological observation list
-- Filter by validation status
-- Photo thumbnails
-- Export to GeoJSON or CSV
+The application filters CoRE Stack layers to prioritize those relevant for field validation. Configuration is in `src/config/westernGhatsLayers.ts`.
 
-## 🔒 Offline Reliability
+## Security
 
-The app uses a multi-layer offline strategy:
+- API keys are loaded from environment variables, never committed to the repository
+- User-entered API keys are stored only in browser localStorage
+- The application requests only necessary device permissions (GPS, camera, storage)
+- No telemetry or analytics are collected
 
-1. **Service Worker** - Caches app shell and static assets
-2. **IndexedDB** - Stores observations, photos, and cached data
-3. **Cache API** - Stores tile and dataset responses
-4. **Local State** - React state for UI responsiveness
+See [SECURITY.md](SECURITY.md) for detailed security information.
 
-## 📤 Exporting Data
+## Troubleshooting
 
-From the Field Log:
-1. Tap the 📋 button to open the log
-2. Scroll to the bottom
-3. Choose export format:
-   - **GeoJSON** - For GIS software (QGIS, ArcGIS)
-   - **CSV** - For spreadsheets
+### Location unavailable
 
-## 🐛 Troubleshooting
-
-### "Location unavailable"
 - Ensure GPS is enabled on your device
 - Grant location permission when prompted
 - Try outdoors for better GPS signal
 
 ### Map tiles not loading
-- Check internet connection (for initial load)
-- Tiles will be cached after first view
 
-### Dataset not showing
-- Run `npm run prepare-data` to copy files
-- Check browser console for errors
-- Verify file exists in `public/data/`
+- Check internet connection for initial load
+- Tiles are cached after first view for offline use
 
-### PWA not installing
-- Use Chrome or Edge (Safari has limited PWA support)
-- Ensure HTTPS in production (localhost works for dev)
+### CoRE Stack data not appearing
 
-## 📄 License
+- Verify your API key is correctly configured
+- Check that the location has CoRE Stack coverage (not all areas are populated)
+- Review browser console for API errors
 
-This application is part of the Western Ghats research workspace.
+## Contributing
 
----
+Contributions are welcome. Please:
 
-**Built for field work. Map stays central. Everything else is secondary.**
+1. Fork the repository
+2. Create a feature branch
+3. Submit a pull request with a clear description of changes
+
+For significant changes, please open an issue first to discuss the proposed approach.
+
+## License
+
+This project is released under the MIT License. See [LICENSE](LICENSE) for details.
+
+## Acknowledgments
+
+- [CoRE Stack](https://core-stack.org/) for geospatial data infrastructure and APIs
+- [Dynamic World](https://dynamicworld.app/) for near real-time land cover classification
+- [MapLibre](https://maplibre.org/) for open-source mapping
+- [Capacitor](https://capacitorjs.com/) for cross-platform mobile development

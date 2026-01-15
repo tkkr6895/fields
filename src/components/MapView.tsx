@@ -3,6 +3,23 @@ import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import type { DatasetLayer, LocationData } from '../types';
 import { coreStackLayerService, CoreStackLayer } from '../services/CoreStackLayerService';
+import { dynamicWorldService } from '../services/DynamicWorldService';
+import { coreStackService } from '../services/CoreStackService';
+
+// Re-export for convenience
+export type { CoreStackLayer } from '../services/CoreStackLayerService';
+
+export interface MapClickFeature {
+  source: 'corestack' | 'dataset';
+  mapLayerId: string;
+  datasetLayerId?: string;
+  coreStackLayerId?: string;
+  properties: Record<string, unknown>;
+}
+
+export interface MapClickInfo {
+  features: MapClickFeature[];
+}
 
 interface MapViewProps {
   center: [number, number];
@@ -12,7 +29,8 @@ interface MapViewProps {
   activeLayers: Set<string>;
   currentLocation: LocationData | null;
   onMapMove: (center: [number, number], zoom: number) => void;
-  onMapClick?: (lat: number, lon: number) => void;
+  onMapClick?: (lat: number, lon: number, info?: MapClickInfo) => void;
+  onCoreStackLayersLoaded?: (layers: CoreStackLayer[]) => void;
 }
 
 // Expose methods to parent
@@ -21,6 +39,8 @@ export interface MapViewRef {
   zoomOut: () => void;
   flyTo: (center: [number, number], zoom?: number) => void;
   resetView: () => void;
+  loadCoreStackForAdmin: (state: string, district: string, tehsil: string) => Promise<void>;
+  loadCoreStackAtPoint: (lat: number, lon: number) => Promise<void>;
 }
 
 // Dark map style for offline use
@@ -87,14 +107,165 @@ const MapView = forwardRef<MapViewRef, MapViewProps>(({
   activeLayers,
   currentLocation,
   onMapMove,
-  onMapClick
+  onMapClick,
+  onCoreStackLayersLoaded
 }, ref) => {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<maplibregl.Map | null>(null);
   const userMarker = useRef<maplibregl.Marker | null>(null);
   const accuracyCircle = useRef<string | null>(null);
-  const [, setCoreStackLayers] = useState<CoreStackLayer[]>([]);
+  const [coreStackLayers, setCoreStackLayers] = useState<CoreStackLayer[]>([]);
   const loadedCoreStackSources = useRef<Set<string>>(new Set());
+  const loadedCoreStackAdmins = useRef<Set<string>>(new Set());
+  const coreStackAutoLoadTimer = useRef<number | null>(null);
+
+  // MapLibre event handlers are registered once; keep latest props via refs.
+  const activeLayersRef = useRef<Set<string>>(activeLayers);
+  const onMapMoveRef = useRef<MapViewProps['onMapMove']>(onMapMove);
+  const onMapClickRef = useRef<MapViewProps['onMapClick']>(onMapClick);
+
+  useEffect(() => {
+    activeLayersRef.current = activeLayers;
+  }, [activeLayers]);
+
+  useEffect(() => {
+    onMapMoveRef.current = onMapMove;
+  }, [onMapMove]);
+
+  useEffect(() => {
+    onMapClickRef.current = onMapClick;
+  }, [onMapClick]);
+
+  const setVisibilitySafe = useCallback((mapInstance: maplibregl.Map, mapLayerId: string, visible: boolean) => {
+    if (!mapInstance.getLayer(mapLayerId)) return;
+    mapInstance.setLayoutProperty(mapLayerId, 'visibility', visible ? 'visible' : 'none');
+  }, []);
+
+  const loadCoreStackForAdmin = useCallback(async (state: string, district: string, tehsil: string) => {
+    if (!map.current || !map.current.isStyleLoaded()) return;
+
+    const adminKey = `${state}|||${district}|||${tehsil}`;
+    if (loadedCoreStackAdmins.current.has(adminKey)) return;
+    loadedCoreStackAdmins.current.add(adminKey);
+
+    try {
+      const layers = await coreStackLayerService.getLayersForLocation(state, district, tehsil);
+      if (layers.length === 0) return;
+
+      setCoreStackLayers(prev => {
+        const existing = new Set(prev.map(l => l.id));
+        const newLayers = layers.filter(l => !existing.has(l.id));
+        const updated = [...prev, ...newLayers];
+        if (newLayers.length > 0 && onCoreStackLayersLoaded) {
+          onCoreStackLayersLoaded(updated);
+        }
+        return updated;
+      });
+
+      for (const layer of layers) {
+        if (loadedCoreStackSources.current.has(layer.id)) continue;
+        if (layer.type !== 'vector') continue;
+
+        const geojson = await coreStackLayerService.fetchLayerGeoJSON(layer);
+        if (!geojson || !map.current) continue;
+
+        const sourceId = `corestack-${layer.id}`;
+        const layerId = `corestack-layer-${layer.id}`;
+
+        try {
+          // Add source
+          if (!map.current.getSource(sourceId)) {
+            map.current.addSource(sourceId, {
+              type: 'geojson',
+              data: geojson
+            });
+
+            // Determine geometry type from first feature
+            const firstFeature = geojson.features?.[0];
+            const geomType = firstFeature?.geometry?.type;
+
+            const isVisible = activeLayersRef.current.has(layer.id);
+
+            if (geomType === 'Polygon' || geomType === 'MultiPolygon') {
+              // Add fill layer
+              map.current.addLayer({
+                id: layerId,
+                type: 'fill',
+                source: sourceId,
+                paint: {
+                  'fill-color': getLayerColor(layer.name),
+                  'fill-opacity': 0.4
+                },
+                layout: {
+                  visibility: isVisible ? 'visible' : 'none'
+                }
+              });
+              // Add outline
+              map.current.addLayer({
+                id: `${layerId}-outline`,
+                type: 'line',
+                source: sourceId,
+                paint: {
+                  'line-color': getLayerColor(layer.name),
+                  'line-width': 2
+                },
+                layout: {
+                  visibility: isVisible ? 'visible' : 'none'
+                }
+              });
+            } else if (geomType === 'Point' || geomType === 'MultiPoint') {
+              map.current.addLayer({
+                id: layerId,
+                type: 'circle',
+                source: sourceId,
+                paint: {
+                  'circle-radius': 6,
+                  'circle-color': getLayerColor(layer.name),
+                  'circle-stroke-width': 2,
+                  'circle-stroke-color': '#ffffff'
+                },
+                layout: {
+                  visibility: isVisible ? 'visible' : 'none'
+                }
+              });
+            } else if (geomType === 'LineString' || geomType === 'MultiLineString') {
+              map.current.addLayer({
+                id: layerId,
+                type: 'line',
+                source: sourceId,
+                paint: {
+                  'line-color': getLayerColor(layer.name),
+                  'line-width': 3
+                },
+                layout: {
+                  visibility: isVisible ? 'visible' : 'none'
+                }
+              });
+            }
+
+            loadedCoreStackSources.current.add(layer.id);
+            console.log(`[MapView] Added CoreStack layer: ${layer.name} (${geojson.features?.length} features)`);
+          }
+        } catch (err) {
+          console.warn(`[MapView] Failed to add CoreStack layer ${layer.name}:`, err);
+        }
+      }
+    } catch (err) {
+      // Allow retry on a later click if anything in the pipeline fails.
+      loadedCoreStackAdmins.current.delete(adminKey);
+      throw err;
+    }
+  }, [onCoreStackLayersLoaded]);
+
+  const loadCoreStackAtPoint = useCallback(async (lat: number, lon: number) => {
+    if (!coreStackService.isAvailable()) return;
+    const admin = await coreStackService.getAdminDetailsByLatLon(lat, lon);
+    const state = admin?.state_name;
+    const district = admin?.district_name;
+    const tehsil = admin?.tehsil_name;
+    if (!state || !district || !tehsil) return;
+    await loadCoreStackForAdmin(state, district, tehsil);
+  }, [loadCoreStackForAdmin]);
 
   // Expose map methods to parent
   useImperativeHandle(ref, () => ({
@@ -127,8 +298,14 @@ const MapView = forwardRef<MapViewRef, MapViewProps>(({
           essential: true
         });
       }
+    },
+    loadCoreStackForAdmin: async (state: string, district: string, tehsil: string) => {
+      await loadCoreStackForAdmin(state, district, tehsil);
+    },
+    loadCoreStackAtPoint: async (lat: number, lon: number) => {
+      await loadCoreStackAtPoint(lat, lon);
     }
-  }), []);
+  }), [loadCoreStackAtPoint, loadCoreStackForAdmin]);
 
   // Initialize map
   useEffect(() => {
@@ -164,14 +341,85 @@ const MapView = forwardRef<MapViewRef, MapViewProps>(({
     map.current.on('moveend', () => {
       if (map.current) {
         const c = map.current.getCenter();
-        onMapMove([c.lng, c.lat], map.current.getZoom());
+        onMapMoveRef.current([c.lng, c.lat], map.current.getZoom());
+
+        // Debounced CoreStack auto-load for map center.
+        // This improves coverage as the user pans across Western Ghats.
+        if (coreStackAutoLoadTimer.current) {
+          window.clearTimeout(coreStackAutoLoadTimer.current);
+        }
+        coreStackAutoLoadTimer.current = window.setTimeout(() => {
+          void (async () => {
+            try {
+              // eslint-disable-next-line @typescript-eslint/no-use-before-define
+              await loadCoreStackAtPoint(c.lat, c.lng);
+            } catch (err) {
+              console.warn('CoreStack center auto-load failed:', err);
+            }
+          })();
+        }, 700);
       }
     });
 
     // Handle map click for location info
     map.current.on('click', (e) => {
-      if (onMapClick) {
-        onMapClick(e.lngLat.lat, e.lngLat.lng);
+      const clickCb = onMapClickRef.current;
+      if (clickCb) {
+        // Opportunistically load CoreStack live layers for the clicked admin unit.
+        // This makes CoreStack feel "live" beyond the small bootstrap set.
+        void (async () => {
+          try {
+            if (!coreStackService.isAvailable()) return;
+            const admin = await coreStackService.getAdminDetailsByLatLon(e.lngLat.lat, e.lngLat.lng);
+            const state = admin?.state_name;
+            const district = admin?.district_name;
+            const tehsil = admin?.tehsil_name;
+            if (!state || !district || !tehsil) return;
+
+            // eslint-disable-next-line @typescript-eslint/no-use-before-define
+            // eslint-disable-next-line @typescript-eslint/no-use-before-define
+            await loadCoreStackForAdmin(state, district, tehsil);
+          } catch (err) {
+            console.warn('CoreStack dynamic load failed:', err);
+          }
+        })();
+
+        const info: MapClickInfo = { features: [] };
+
+        try {
+          const rendered = map.current?.queryRenderedFeatures(e.point) || [];
+          for (const f of rendered) {
+            const mapLayerId = (f.layer as any)?.id as string | undefined;
+            if (!mapLayerId) continue;
+
+            // Only report layers the user can actually toggle
+            if (mapLayerId.startsWith('corestack-layer-')) {
+              const coreStackLayerId = mapLayerId.replace('corestack-layer-', '');
+              if (!activeLayersRef.current.has(coreStackLayerId)) continue;
+
+              info.features.push({
+                source: 'corestack',
+                mapLayerId,
+                coreStackLayerId,
+                properties: (f.properties || {}) as Record<string, unknown>
+              });
+            } else if (mapLayerId.startsWith('layer-')) {
+              const datasetLayerId = mapLayerId.replace('layer-', '');
+              if (!activeLayersRef.current.has(datasetLayerId)) continue;
+
+              info.features.push({
+                source: 'dataset',
+                mapLayerId,
+                datasetLayerId,
+                properties: (f.properties || {}) as Record<string, unknown>
+              });
+            }
+          }
+        } catch (err) {
+          console.warn('Failed to query rendered features:', err);
+        }
+
+        clickCb(e.lngLat.lat, e.lngLat.lng, info);
       }
     });
 
@@ -186,7 +434,96 @@ const MapView = forwardRef<MapViewRef, MapViewProps>(({
   useEffect(() => {
     if (!map.current) return;
     map.current.setStyle(basemap === 'dark' ? DARK_STYLE : SATELLITE_STYLE);
+
+    // Style change wipes custom sources/layers; reload once the new style is ready.
+    loadedCoreStackSources.current.clear();
+    loadedCoreStackAdmins.current.clear();
+    setCoreStackLayers([]);
+
+    const reload = () => {
+      // These functions handle waiting for style load internally, but we call them to kick the process off.
+      // They are defined below and are stable via useCallback.
+      // eslint-disable-next-line @typescript-eslint/no-use-before-define
+      loadGeoJSONLayers();
+      // eslint-disable-next-line @typescript-eslint/no-use-before-define
+      loadImageOverlays();
+      // eslint-disable-next-line @typescript-eslint/no-use-before-define
+      loadRasterTileLayers();
+      // eslint-disable-next-line @typescript-eslint/no-use-before-define
+      loadCoreStackLayers();
+    };
+
+    map.current.once('styledata', reload);
   }, [basemap]);
+
+  // Load and display XYZ raster tile layers
+  const loadRasterTileLayers = useCallback(async () => {
+    if (!map.current) return;
+
+    if (!map.current.isStyleLoaded()) {
+      map.current.once('styledata', loadRasterTileLayers);
+      return;
+    }
+
+    for (const layer of layers) {
+      if (layer.type !== 'raster' || layer.source.format !== 'xyz') continue;
+
+      // Dynamic World live layer is resolved via a proxy at runtime.
+      let tileTemplate = layer.source.path;
+      if (layer.id === 'dynamicworld_live' && tileTemplate.startsWith('dynamicworld://')) {
+        try {
+          const resolved = await dynamicWorldService.getLiveTileUrlTemplate();
+          if (!resolved) {
+            // Not configured; avoid adding a broken source.
+            continue;
+          }
+          tileTemplate = resolved;
+        } catch (err) {
+          console.warn('Failed to resolve Dynamic World live tiles:', err);
+          continue;
+        }
+      }
+
+      const sourceId = `source-${layer.id}`;
+      const layerId = `layer-${layer.id}`;
+      const isActive = activeLayers.has(layer.id);
+
+      try {
+        if (!map.current.getSource(sourceId)) {
+          map.current.addSource(sourceId, {
+            type: 'raster',
+            tiles: [tileTemplate],
+            tileSize: 256,
+            minzoom: layer.minZoom,
+            maxzoom: layer.maxZoom
+          } as any);
+
+          map.current.addLayer({
+            id: layerId,
+            type: 'raster',
+            source: sourceId,
+            paint: {
+              'raster-opacity': layer.style?.opacity ?? 0.8,
+              'raster-fade-duration': 0
+            },
+            layout: {
+              visibility: isActive ? 'visible' : 'none'
+            }
+          });
+        } else {
+          if (map.current.getLayer(layerId)) {
+            map.current.setLayoutProperty(layerId, 'visibility', isActive ? 'visible' : 'none');
+          }
+        }
+      } catch (error) {
+        console.warn(`Failed to load tile layer ${layer.id}:`, error);
+      }
+    }
+  }, [layers, activeLayers]);
+
+  useEffect(() => {
+    loadRasterTileLayers();
+  }, [loadRasterTileLayers]);
 
   // Update center/zoom - only if significantly different to avoid loops
   useEffect(() => {
@@ -457,100 +794,25 @@ const MapView = forwardRef<MapViewRef, MapViewProps>(({
     
     for (const loc of knownLocations.slice(0, 3)) { // Start with first 3 to avoid overload
       try {
-        const layers = await coreStackLayerService.getLayersForLocation(
-          loc.state,
-          loc.district,
-          loc.tehsil
-        );
-
-        if (layers.length > 0) {
-          setCoreStackLayers(prev => {
-            const existing = new Set(prev.map(l => l.id));
-            const newLayers = layers.filter(l => !existing.has(l.id));
-            return [...prev, ...newLayers];
-          });
-
-          // Load each layer's GeoJSON and add to map
-          for (const layer of layers) {
-            if (loadedCoreStackSources.current.has(layer.id)) continue;
-            if (layer.type !== 'vector') continue;
-
-            const geojson = await coreStackLayerService.fetchLayerGeoJSON(layer);
-            if (!geojson || !map.current) continue;
-
-            const sourceId = `corestack-${layer.id}`;
-            const layerId = `corestack-layer-${layer.id}`;
-
-            try {
-              // Add source
-              if (!map.current.getSource(sourceId)) {
-                map.current.addSource(sourceId, {
-                  type: 'geojson',
-                  data: geojson
-                });
-
-                // Determine geometry type from first feature
-                const firstFeature = geojson.features?.[0];
-                const geomType = firstFeature?.geometry?.type;
-
-                if (geomType === 'Polygon' || geomType === 'MultiPolygon') {
-                  // Add fill layer
-                  map.current.addLayer({
-                    id: layerId,
-                    type: 'fill',
-                    source: sourceId,
-                    paint: {
-                      'fill-color': getLayerColor(layer.name),
-                      'fill-opacity': 0.4
-                    }
-                  });
-                  // Add outline
-                  map.current.addLayer({
-                    id: `${layerId}-outline`,
-                    type: 'line',
-                    source: sourceId,
-                    paint: {
-                      'line-color': getLayerColor(layer.name),
-                      'line-width': 2
-                    }
-                  });
-                } else if (geomType === 'Point' || geomType === 'MultiPoint') {
-                  map.current.addLayer({
-                    id: layerId,
-                    type: 'circle',
-                    source: sourceId,
-                    paint: {
-                      'circle-radius': 6,
-                      'circle-color': getLayerColor(layer.name),
-                      'circle-stroke-width': 2,
-                      'circle-stroke-color': '#ffffff'
-                    }
-                  });
-                } else if (geomType === 'LineString' || geomType === 'MultiLineString') {
-                  map.current.addLayer({
-                    id: layerId,
-                    type: 'line',
-                    source: sourceId,
-                    paint: {
-                      'line-color': getLayerColor(layer.name),
-                      'line-width': 3
-                    }
-                  });
-                }
-
-                loadedCoreStackSources.current.add(layer.id);
-                console.log(`[MapView] Added CoreStack layer: ${layer.name} (${geojson.features?.length} features)`);
-              }
-            } catch (err) {
-              console.warn(`[MapView] Failed to add CoreStack layer ${layer.name}:`, err);
-            }
-          }
-        }
+        await loadCoreStackForAdmin(loc.state, loc.district, loc.tehsil);
       } catch (err) {
         console.warn(`[MapView] Failed to load CoreStack layers for ${loc.district}:`, err);
       }
     }
-  }, []);
+  }, [loadCoreStackForAdmin]);
+
+  // Sync CoreStack layer visibility with activeLayers toggles
+  useEffect(() => {
+    if (!map.current || !map.current.isStyleLoaded()) return;
+    if (coreStackLayers.length === 0) return;
+
+    for (const layer of coreStackLayers) {
+      const baseId = `corestack-layer-${layer.id}`;
+      const visible = activeLayers.has(layer.id);
+      setVisibilitySafe(map.current, baseId, visible);
+      setVisibilitySafe(map.current, `${baseId}-outline`, visible);
+    }
+  }, [activeLayers, coreStackLayers, setVisibilitySafe]);
 
   // Load CoreStack layers on mount
   useEffect(() => {

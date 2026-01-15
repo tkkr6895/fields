@@ -41,9 +41,29 @@ export interface DynamicWorldPointData {
   probabilities: Record<string, number>;
 }
 
+interface DynamicWorldMapIdResponse {
+  mapid: string;
+  token: string;
+  urlFormat: string;
+}
+
 class DynamicWorldService {
   private cachedData: DynamicWorldData[] = [];
   private dataLoaded: boolean = false;
+  private mapIdCache: Map<string, DynamicWorldMapIdResponse> = new Map();
+
+  private getProxyBaseUrl(): string | null {
+    // First check env var (for production or custom setup)
+    const v = (import.meta.env.VITE_DW_GEE_PROXY_URL || '').trim();
+    if (v.length > 0) return v;
+    
+    // In dev mode, use the Vite proxy
+    if (import.meta.env.DEV) {
+      return '/api/dw';
+    }
+    
+    return null;
+  }
 
   /**
    * Load cached Dynamic World data from local files
@@ -155,21 +175,62 @@ class DynamicWorldService {
    * 
    * For regional statistics, use getRegionalStats() instead.
    */
-  async fetchPointData(_lat: number, _lon: number, _date?: string): Promise<DynamicWorldPointData | null> {
-    // Point-specific LULC data is NOT available without GEE API integration
-    // DO NOT return synthetic/estimated data based on regional stats
-    // This was the source of the "fake data" problem
-    
-    console.warn('[DynamicWorld] Point-specific LULC data not available. Requires Google Earth Engine API integration.');
-    return null;
+  async fetchPointData(lat: number, lon: number, date?: string): Promise<DynamicWorldPointData | null> {
+    const base = this.getProxyBaseUrl();
+    if (!base) {
+      console.warn('[DynamicWorld] Live mode not configured. Set VITE_DW_GEE_PROXY_URL.');
+      return null;
+    }
+
+    const url = new URL('/dynamicworld/point', base);
+    url.searchParams.set('lat', String(lat));
+    url.searchParams.set('lon', String(lon));
+    if (date) url.searchParams.set('date', date);
+
+    const response = await fetch(url.toString());
+    if (!response.ok) {
+      const text = await response.text().catch(() => '');
+      throw new Error(`Dynamic World proxy error (${response.status}): ${text || response.statusText}`);
+    }
+
+    const data = (await response.json()) as DynamicWorldPointData;
+    if (!data || typeof data.landCoverClass !== 'string') return null;
+    return data;
   }
 
   /**
    * Check if point-specific data is available
-   * Currently always returns false as GEE integration is not implemented
+   * True when a GEE proxy endpoint is configured.
    */
   isPointDataAvailable(): boolean {
-    return false;
+    return this.getProxyBaseUrl() !== null;
+  }
+
+  /**
+   * Get an XYZ tile template for a live Dynamic World layer.
+   * Returned string is a full urlFormat suitable for MapLibre raster tiles.
+   */
+  async getLiveTileUrlTemplate(date?: string): Promise<string | null> {
+    const base = this.getProxyBaseUrl();
+    if (!base) return null;
+
+    const cacheKey = date || 'latest';
+    const cached = this.mapIdCache.get(cacheKey);
+    if (cached?.urlFormat) return cached.urlFormat;
+
+    const url = new URL('/dynamicworld/mapid', base);
+    if (date) url.searchParams.set('date', date);
+
+    const response = await fetch(url.toString());
+    if (!response.ok) {
+      const text = await response.text().catch(() => '');
+      throw new Error(`Dynamic World proxy error (${response.status}): ${text || response.statusText}`);
+    }
+
+    const data = (await response.json()) as DynamicWorldMapIdResponse;
+    if (!data?.urlFormat) return null;
+    this.mapIdCache.set(cacheKey, data);
+    return data.urlFormat;
   }
 
   /**

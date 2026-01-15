@@ -738,6 +738,8 @@ html, body, #root {
   flex-direction: column;
   height: 100%;
   overflow: hidden;
+  flex: 1;
+  min-height: 0;
 }
 
 .field-log-list {
@@ -745,6 +747,7 @@ html, body, #root {
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   padding-bottom: 80px; /* Space for export buttons */
+  min-height: 0;
 }
 
 .field-log-filters {
@@ -876,10 +879,14 @@ html, body, #root {
 .export-buttons {
   display: flex;
   gap: 8px;
-  margin-top: 16px;
-  padding-top: 16px;
+  margin-top: 0;
+  padding: 12px 12px;
   border-top: 1px solid var(--border);
   flex-wrap: wrap;
+  position: sticky;
+  bottom: 0;
+  background: var(--bg-secondary);
+  z-index: 5;
 }
 
 .export-btn {
@@ -3226,7 +3233,8 @@ html, body, #root {
   left: 0;
   right: 0;
   bottom: 64px;
-  max-height: 50vh;
+  height: min(70vh, calc(100vh - 160px));
+  max-height: min(70vh, calc(100vh - 160px));
   background: var(--bg-secondary);
   border-top: 1px solid var(--border);
   border-radius: 16px 16px 0 0;
@@ -3957,6 +3965,112 @@ html, body, #root {
 
 .lp-cat-actions button:hover {
   background: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+/* CoreStack Explorer (within CoreStack Live section) */
+.lp-corestack-explorer {
+  margin: 10px 0 8px;
+  padding: 10px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.lp-corestack-explorer-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.lp-corestack-explorer-subtitle {
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.lp-corestack-explorer-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.lp-corestack-explorer-actions button {
+  flex: 1;
+  padding: 6px 10px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 11px;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.lp-corestack-explorer-actions button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.lp-corestack-explorer-form {
+  margin-top: 10px;
+}
+
+.lp-corestack-explorer-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.lp-corestack-input {
+  flex: 1;
+  padding: 8px 10px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text-primary);
+  font-size: 12px;
+  outline: none;
+}
+
+.lp-corestack-input::placeholder {
+  color: var(--text-muted);
+}
+
+.lp-corestack-explorer-row button {
+  padding: 8px 12px;
+  background: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  color: white;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.lp-corestack-explorer-row button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.lp-corestack-status {
+  margin-top: 8px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-size: 11px;
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  background: var(--bg-tertiary);
+}
+
+.lp-corestack-status.ok {
+  border-color: rgba(0, 191, 165, 0.5);
+  background: rgba(0, 191, 165, 0.1);
+  color: var(--text-primary);
+}
+
+.lp-corestack-status.error {
+  border-color: rgba(244, 67, 54, 0.5);
+  background: rgba(244, 67, 54, 0.12);
   color: var(--text-primary);
 }
 

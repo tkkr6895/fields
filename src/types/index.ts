@@ -13,7 +13,7 @@ export interface DatasetLayer {
   title: string;
   type: 'vector' | 'raster' | 'csv' | 'image-overlay';
   source: {
-    format: 'geojson' | 'csv' | 'pmtiles' | 'mbtiles' | 'tiff' | 'png';
+    format: 'geojson' | 'csv' | 'pmtiles' | 'mbtiles' | 'tiff' | 'png' | 'xyz';
     path: string;
   };
   style?: {
@@ -32,9 +32,11 @@ export interface DatasetLayer {
     east: number;
     north: number;
   };
+  minZoom?: number;
+  maxZoom?: number;
   year?: number;
   description?: string;
-  category: 'lulc' | 'corestack' | 'forest' | 'boundary' | 'built' | 'treecover' | 'other';
+  category: 'lulc' | 'dynamicworld' | 'corestack' | 'forest' | 'boundary' | 'built' | 'treecover' | 'other';
   enabled: boolean;
 }
 

@@ -358,60 +358,19 @@ class LocationDataService {
    * Get land cover data - ONLY from authentic sources
    * 
    * Available data:
-   * - Regional summary from Dynamic World CSV (Western Ghats wide)
-   * - Point-specific data requires GEE API (online only, not implemented)
+   * - Point-specific data from Dynamic World via GEE proxy (online only)
    * 
    * NEVER synthesizes point-specific data from regional stats
    */
   private async getLandCoverData(_lat: number, _lon: number, _isOnline: boolean): Promise<LocationEnrichment['landCover'] | null> {
     try {
-      await dynamicWorldService.loadCachedData();
-      const latestStats = dynamicWorldService.getRegionalStats();
-      
-      if (latestStats) {
-        // Calculate percentages from area data
-        const total = latestStats.water + latestStats.trees + latestStats.grass + 
-                     latestStats.floodedVegetation + latestStats.crops + 
-                     latestStats.shrubAndScrub + latestStats.built + 
-                     latestStats.bare + latestStats.snowAndIce;
-        
-        if (total > 0) {
-          const classes: Record<string, number> = {
-            'Water': (latestStats.water / total) * 100,
-            'Trees': (latestStats.trees / total) * 100,
-            'Grass': (latestStats.grass / total) * 100,
-            'Flooded Vegetation': (latestStats.floodedVegetation / total) * 100,
-            'Crops': (latestStats.crops / total) * 100,
-            'Shrub and Scrub': (latestStats.shrubAndScrub / total) * 100,
-            'Built': (latestStats.built / total) * 100,
-            'Bare': (latestStats.bare / total) * 100
-          };
-          
-          // Find dominant class
-          let dominantClass = 'Trees';
-          let maxPct = 0;
-          for (const [cls, pct] of Object.entries(classes)) {
-            if (pct > maxPct) {
-              maxPct = pct;
-              dominantClass = cls;
-            }
-          }
-          
+      if (_isOnline && dynamicWorldService.isPointDataAvailable()) {
+        const pointData = await dynamicWorldService.fetchPointData(_lat, _lon);
+        if (pointData) {
           return {
-            regionalSummary: {
-              dominantClass,
-              trees: classes['Trees'],
-              crops: classes['Crops'],
-              built: classes['Built'],
-              water: classes['Water'],
-              shrubAndScrub: classes['Shrub and Scrub'],
-              grass: classes['Grass'],
-              bare: classes['Bare'],
-              year: latestStats.year
-            },
-            pointDataAvailable: false,
-            source: 'dynamicworld_regional',
-            note: 'Regional average for Western Ghats. Point-specific LULC requires Google Earth Engine API integration.'
+            pointDataAvailable: true,
+            source: 'dynamicworld_point',
+            note: `Dynamic World live point result: ${pointData.landCoverClass} (${(pointData.confidence * 100).toFixed(1)}% confidence)`
           };
         }
       }
@@ -422,7 +381,9 @@ class LocationDataService {
     return {
       pointDataAvailable: false,
       source: 'unavailable',
-      note: 'No LULC data available for this location'
+      note: _isOnline
+        ? 'Dynamic World point-specific LULC requires a configured GEE proxy endpoint'
+        : 'Offline - Dynamic World point-specific LULC requires internet'
     };
   }
   

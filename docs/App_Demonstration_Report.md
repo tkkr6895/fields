@@ -87,27 +87,13 @@ pdf_options:
 <p class="caption">Figure 3: Natural forest (green) vs plantations (purple)</p>
 </div>
 <div class="col-60">
-<p>The forest typology distinguishes natural forests from plantations using multi-criteria analysis:</p>
-<div class="row">
-<div class="col">
-<h3>Natural Forest Indicators</h3>
+<h3>Data Sources</h3>
+<p>The forest typology layer integrates two pre-existing datasets served locally within the application:</p>
 <ul>
-<li><strong>Tree cover persistence:</strong> Consistent 2000-2020</li>
-<li><strong>Canopy structure:</strong> Multi-layered, heterogeneous</li>
-<li><strong>Spatial pattern:</strong> Irregular boundaries</li>
-<li><strong>Historical use:</strong> No clearing/replanting</li>
+<li><strong>Google Dynamic World:</strong> Near real-time LULC classification providing tree cover extent</li>
+<li><strong>Natural Forest 2020:</strong> AI-based classification separating natural forests from tree plantations, developed by Google Research for deforestation-free supply chain verification (<a href="https://research.google/blog/separating-natural-forests-from-other-tree-cover-with-ai-for-deforestation-free-supply-chains/">source</a>)</li>
 </ul>
-</div>
-<div class="col">
-<h3>Plantation Indicators</h3>
-<ul>
-<li><strong>Spectral signatures:</strong> Monoculture reflectance</li>
-<li><strong>Row patterns:</strong> Geometric arrangements</li>
-<li><strong>Age uniformity:</strong> Even-aged stands</li>
-<li><strong>Crop cycles:</strong> Periodic harvesting</li>
-</ul>
-</div>
-</div>
+<p>The Natural Forest 2020 dataset uses machine learning trained on global forest inventory data to distinguish between natural forests (multi-species, uneven age) and managed plantations (monoculture, even-aged stands) at 10m resolution.</p>
 <p><em>This distinction is critical: natural forests support significantly higher biodiversity than plantations, despite both appearing as "forest" in conventional satellite classifications.</em></p>
 </div>
 </div>
@@ -231,32 +217,35 @@ pdf_options:
 
 <hr>
 
-## 8. Benefits and Resources
+## 8. Bidirectional Value: Field Data and Geospatial Models
 
 <div class="row">
 <div class="col">
-<h3>For Field Researchers</h3>
+<h3>Geospatial Data Enriches Field Work</h3>
+<p>Field investigators can leverage satellite-derived datasets and models to enhance their data collection:</p>
 <ul>
-<li>Works offline in remote areas</li>
-<li>Automatic GPS with accuracy</li>
-<li>Multiple layer comparison</li>
+<li>Pre-visit planning using LULC classifications to identify target areas</li>
+<li>Real-time context from CoRE Stack watershed indicators at any location</li>
+<li>Historical change detection layers to prioritize validation sites</li>
+<li>Multi-layer comparison to cross-reference classifications during fieldwork</li>
 </ul>
 </div>
 <div class="col">
-<h3>For Conservation Orgs</h3>
+<h3>Field Data Refines Geo-Models</h3>
+<p>Ground-truth observations collected through this app can programmatically improve model accuracy:</p>
 <ul>
-<li>Systematic validation</li>
-<li>Plantation vs forest distinction</li>
-<li>Standardized methodology</li>
+<li>Structured JSON/CSV exports compatible with ML training pipelines</li>
+<li>GPS-tagged photos provide labeled samples for classification refinement</li>
+<li>Match/Mismatch validation flags identify systematic model errors</li>
+<li>Offline collection enables data gathering in remote, under-sampled regions</li>
 </ul>
 </div>
+</div>
+
+<div class="row">
 <div class="col">
 <h3>Resources</h3>
-<ul>
-<li>Sample data: <code>field-data/recovered-observations/</code></li>
-<li>API notebook: <code>docs/notebooks/corestack_api_tested.ipynb</code></li>
-<li>License: MIT</li>
-</ul>
+<p>Sample data: <code>field-data/recovered-observations/</code> | API notebook: <code>docs/notebooks/corestack_api_tested.ipynb</code> | License: MIT</p>
 </div>
 </div>
 

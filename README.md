@@ -93,9 +93,9 @@ This launches the Vite development server and the Earth Engine proxy simultaneou
 
 ## Download Pre-Built APK
 
-Pre-built APKs are available from the [Actions]((https://github.com/tkkr6895/fields/actions)) page. To install:
+Pre-built APKs are available from the [Actions](https://github.com/tkkr6895/fields/actions) page. To install:
 
-1.Click on the latest action which ran succesfully
+1. Click on the latest action which ran successfully
 2. Download the latest artifact in the build. Decompressing it should reveal an `app-debug.apk`
 3. On your Android device, enable "Install from unknown sources" in Settings
 4. Open the downloaded APK and tap Install

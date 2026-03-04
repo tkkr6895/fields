@@ -8,6 +8,14 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 
+// Catch unhandled errors to prevent silent crashes
+process.on('uncaughtException', (err) => {
+  console.error('[FATAL] Uncaught exception:', err.message, err.stack);
+});
+process.on('unhandledRejection', (err) => {
+  console.error('[FATAL] Unhandled rejection:', err);
+});
+
 const execAsync = promisify(exec);
 const PORT = Number(process.env.PORT || 8787);
 
@@ -105,21 +113,76 @@ function ensureEarthEngine() {
       return;
     }
 
-    // Try CLI credentials (for development - uses `earthengine authenticate`)
+    // For CLI / gcloud ADC credentials, use google-auth-library to get an access token,
+    // then pass it to EE via ee.data.setAuthToken (avoids the browser-only authenticateViaOauth).
+    const credSources = [];
+    
+    // 1. EE CLI credentials
     const cliCreds = await getCliCredentials();
-    if (cliCreds) {
-      console.log('[GEE] Authenticating via CLI credentials...');
-      
-      // For OAuth credentials from CLI
-      if (cliCreds.refresh_token) {
-        ee.data.authenticateViaOauth(
-          cliCreds.client_id,
+    if (cliCreds?.refresh_token && cliCreds?.client_id) {
+      credSources.push({ label: 'EE CLI', ...cliCreds });
+    }
+    
+    // 2. gcloud Application Default Credentials
+    const adcPath = path.join(process.env.APPDATA || path.join(os.homedir(), '.config'), 'gcloud', 'application_default_credentials.json');
+    if (fs.existsSync(adcPath)) {
+      try {
+        const adcCreds = JSON.parse(fs.readFileSync(adcPath, 'utf-8'));
+        if (adcCreds.refresh_token && adcCreds.client_id) {
+          credSources.push({ label: 'gcloud ADC', ...adcCreds });
+        }
+      } catch (adcErr) {
+        console.warn('[GEE] Failed to read gcloud ADC:', adcErr.message);
+      }
+    }
+
+    for (const cred of credSources) {
+      try {
+        console.log(`[GEE] Authenticating via ${cred.label} (refresh token → access token)...`);
+        
+        // Use google-auth-library to exchange refresh token for access token
+        const { OAuth2Client } = await import('google-auth-library');
+        const oauth2Client = new OAuth2Client(cred.client_id, cred.client_secret);
+        oauth2Client.setCredentials({ refresh_token: cred.refresh_token });
+        
+        const tokenResponse = await oauth2Client.getAccessToken();
+        const accessToken = tokenResponse.token;
+        
+        if (!accessToken) {
+          console.warn(`[GEE] ${cred.label}: Failed to get access token`);
+          continue;
+        }
+        
+        console.log(`[GEE] Got access token via ${cred.label}, initializing EE...`);
+        
+        // Set the auth token directly (works in Node.js without browser DOM)
+        ee.data.setAuthToken(
+          cred.client_id,
+          'Bearer',
+          accessToken,
+          3600, // expires in seconds
+          [],   // extra scopes
           () => {
             ee.initialize(
               null,
               null,
               () => {
-                console.log(`[GEE] Initialized with CLI auth for project: ${GEE_PROJECT}`);
+                console.log(`[GEE] ✓ Initialized with ${cred.label} for project: ${GEE_PROJECT}`);
+                
+                // Set up token refresh
+                ee.data.setAuthTokenRefresher(async (authArgs, callback) => {
+                  try {
+                    const refreshed = await oauth2Client.getAccessToken();
+                    callback({
+                      access_token: refreshed.token,
+                      token_type: 'Bearer',
+                      expires_in: 3600,
+                    });
+                  } catch (refreshErr) {
+                    callback({ error: refreshErr.message });
+                  }
+                });
+                
                 resolve();
               },
               (err) => reject(err),
@@ -127,40 +190,17 @@ function ensureEarthEngine() {
               GEE_PROJECT
             );
           },
-          (err) => reject(err),
-          null,
-          () => cliCreds.refresh_token
+          false // not a service account
         );
-        return;
+        return; // success — stop trying other cred sources
+      } catch (authErr) {
+        console.warn(`[GEE] ${cred.label} auth failed:`, authErr.message);
       }
     }
 
-    // Last resort: try default application credentials (gcloud auth)
-    console.log('[GEE] Attempting default application credentials...');
-    try {
-      ee.data.authenticateViaOauth(
-        null,
-        () => {
-          ee.initialize(
-            null,
-            null,
-            () => {
-              console.log(`[GEE] Initialized with default credentials for project: ${GEE_PROJECT}`);
-              resolve();
-            },
-            (err) => reject(err),
-            null,
-            GEE_PROJECT
-          );
-        },
-        (err) => {
-          console.error('[GEE] All authentication methods failed');
-          reject(new Error('No valid GEE credentials found. Run `earthengine authenticate` or set GEE_SERVICE_ACCOUNT_JSON'));
-        }
-      );
-    } catch (err) {
-      reject(new Error('No valid GEE credentials. Run `earthengine authenticate` or set GEE_SERVICE_ACCOUNT_JSON'));
-    }
+    // If we get here, all credential sources failed
+    console.error('[GEE] All authentication methods failed');
+    reject(new Error('No valid GEE credentials. Run `gcloud auth application-default login --scopes=https://www.googleapis.com/auth/earthengine,https://www.googleapis.com/auth/devstorage.full_control,https://www.googleapis.com/auth/cloud-platform` or set GEE_SERVICE_ACCOUNT_JSON'));
   });
 
   return eeReadyPromise;
@@ -173,7 +213,55 @@ function pickImage(dateStr, point) {
     const d = ee.Date(dateStr);
     col = col.filterDate(d.advance(-16, 'day'), d.advance(16, 'day'));
   }
-  return ee.Image(col.sort('system:time_start', false).first());
+  // Return collection (caller decides how to reduce)
+  return col;
+}
+
+/**
+ * Returns result for a DW point query. Tries provided date, then falls back to
+ * progressively wider windows until data is found.
+ */
+function queryPointData(lat, lon, dateStr) {
+  return new Promise((resolve, reject) => {
+    const point = ee.Geometry.Point([lon, lat]);
+    const bands = ['label', 'water', 'trees', 'grass', 'flooded_vegetation', 'crops', 'shrub_and_scrub', 'built', 'bare', 'snow_and_ice'];
+
+    let col = ee.ImageCollection('GOOGLE/DYNAMICWORLD/V1').filterBounds(point);
+
+    if (dateStr) {
+      const d = ee.Date(dateStr);
+      col = col.filterDate(d.advance(-16, 'day'), d.advance(16, 'day'));
+    } else {
+      // Default: last 365 days (DW can have months of latency)
+      const now = ee.Date(Date.now());
+      col = col.filterDate(now.advance(-365, 'day'), now);
+    }
+
+    // First check if collection has data
+    col.size().getInfo((size, sizeErr) => {
+      if (sizeErr) return reject(sizeErr);
+      if (!size || size === 0) return resolve(null);
+
+      // Use mosaic of most-recent images so we get coverage even if 
+      // the single latest scene doesn't include this point
+      const image = col.sort('system:time_start', false).mosaic();
+      
+      // Use reduceRegion — more reliable for single points than sample()
+      const dict = image.select(bands).reduceRegion({
+        reducer: ee.Reducer.first(),
+        geometry: point,
+        scale: 10,
+        bestEffort: true,
+      });
+      
+      dict.getInfo((info, err) => {
+        if (err) return reject(err);
+        // Check if we got actual values (not all nulls)
+        if (!info || info.label === null || info.label === undefined) return resolve(null);
+        resolve(info);
+      });
+    });
+  });
 }
 
 const app = express();
@@ -203,50 +291,37 @@ app.get('/dynamicworld/point', async (req, res) => {
       return;
     }
 
-    const point = ee.Geometry.Point([lon, lat]);
-    const image = pickImage(date, point);
+    const info = await queryPointData(lat, lon, date);
 
-    // Dynamic World bands include: label + probability bands.
-    const bands = ['label', 'water', 'trees', 'grass', 'flooded_vegetation', 'crops', 'shrub_and_scrub', 'built', 'bare', 'snow_and_ice'];
+    if (!info) {
+      res.status(404).json({ error: 'No Dynamic World data for this location/date range' });
+      return;
+    }
 
-    const sample = image.select(bands).sample({ region: point, scale: 10, numPixels: 1, geometries: false }).first();
-    const dict = ee.Dictionary(sample.toDictionary());
+    const label = Number(info.label);
+    const probs = {
+      Water: Number(info.water ?? 0),
+      Trees: Number(info.trees ?? 0),
+      Grass: Number(info.grass ?? 0),
+      'Flooded Vegetation': Number(info.flooded_vegetation ?? 0),
+      Crops: Number(info.crops ?? 0),
+      'Shrub and Scrub': Number(info.shrub_and_scrub ?? 0),
+      Built: Number(info.built ?? 0),
+      Bare: Number(info.bare ?? 0),
+      'Snow and Ice': Number(info.snow_and_ice ?? 0)
+    };
 
-    dict.getInfo((info, err) => {
-      if (err) {
-        res.status(500).json({ error: String(err) });
-        return;
-      }
-      if (!info) {
-        res.status(404).json({ error: 'No Dynamic World sample for this location/date' });
-        return;
-      }
+    const entries = Object.entries(probs).sort((a, b) => b[1] - a[1]);
+    const top = entries[0] || ['Unknown', 0];
 
-      const label = Number(info.label);
-      const probs = {
-        Water: Number(info.water ?? 0),
-        Trees: Number(info.trees ?? 0),
-        Grass: Number(info.grass ?? 0),
-        'Flooded Vegetation': Number(info.flooded_vegetation ?? 0),
-        Crops: Number(info.crops ?? 0),
-        'Shrub and Scrub': Number(info.shrub_and_scrub ?? 0),
-        Built: Number(info.built ?? 0),
-        Bare: Number(info.bare ?? 0),
-        'Snow and Ice': Number(info.snow_and_ice ?? 0)
-      };
-
-      const entries = Object.entries(probs).sort((a, b) => b[1] - a[1]);
-      const top = entries[0] || ['Unknown', 0];
-
-      res.json({
-        lat,
-        lon,
-        date: date || null,
-        landCoverClass: DW_CLASS_NAMES[label] || top[0],
-        confidence: Number(top[1] || 0),
-        probabilities: probs,
-        timestamp: new Date().toISOString()
-      });
+    res.json({
+      lat,
+      lon,
+      date: date || null,
+      landCoverClass: DW_CLASS_NAMES[label] || top[0],
+      confidence: Number(top[1] || 0),
+      probabilities: probs,
+      timestamp: new Date().toISOString()
     });
   } catch (e) {
     res.status(500).json({ error: String(e?.message || e) });
@@ -261,10 +336,21 @@ app.get('/dynamicworld/mapid', async (req, res) => {
     const date = typeof req.query.date === 'string' ? req.query.date : undefined;
 
     const regionBbox = ee.Geometry.Rectangle([72.5, 8.0, 78.5, 21.5]);
-    const image = pickImage(date, regionBbox.centroid(1));
+    let col = ee.ImageCollection('GOOGLE/DYNAMICWORLD/V1')
+      .filterBounds(regionBbox);
+    
+    if (date) {
+      const d = ee.Date(date);
+      col = col.filterDate(d.advance(-16, 'day'), d.advance(16, 'day'));
+    } else {
+      const now = ee.Date(Date.now());
+      col = col.filterDate(now.advance(-365, 'day'), now);
+    }
+    
+    // Use mode composite for the map view
+    const image = col.select('label').mode().clip(regionBbox);
 
     const vis = image
-      .select('label')
       .visualize({ min: 0, max: 8, palette: DW_PALETTE });
 
     vis.getMap({}, (map, err) => {

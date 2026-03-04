@@ -1,7 +1,17 @@
 import exifr from 'exifr';
 import { v4 as uuidv4 } from 'uuid';
+import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
 import { db } from '../db/database';
 import type { ExifData, ImageData } from '../types';
+
+/** Detect Capacitor native platform at runtime */
+function isNativePlatform(): boolean {
+  return Boolean(
+    (globalThis as any)?.Capacitor &&
+    typeof (globalThis as any).Capacitor.isNativePlatform === 'function' &&
+    (globalThis as any).Capacitor.isNativePlatform()
+  );
+}
 
 export class ImageService {
   
@@ -156,28 +166,50 @@ export class ImageService {
     return record.blob;
   }
 
+  // ─── Task 1.6.1: Capacitor Camera with HTML fallback ───────────
+
   async captureFromCamera(): Promise<File | null> {
-    return new Promise((resolve) => {
-      const input = document.createElement('input');
-      input.type = 'file';
-      input.accept = 'image/*';
-      input.capture = 'environment'; // Use rear camera
-
-      input.onchange = (e) => {
-        const target = e.target as HTMLInputElement;
-        const file = target.files?.[0];
-        resolve(file || null);
-      };
-
-      input.click();
-    });
+    if (isNativePlatform()) {
+      return this.captureViaCapacitor(CameraSource.Camera);
+    }
+    return this.captureViaHTML('environment');
   }
 
   async selectFromGallery(): Promise<File | null> {
+    if (isNativePlatform()) {
+      return this.captureViaCapacitor(CameraSource.Photos);
+    }
+    return this.captureViaHTML();
+  }
+
+  /** Capacitor Camera capture */
+  private async captureViaCapacitor(source: CameraSource): Promise<File | null> {
+    try {
+      const photo = await Camera.getPhoto({
+        quality: 90,
+        resultType: CameraResultType.Uri,
+        source,
+        saveToGallery: false,
+        correctOrientation: true,
+      });
+
+      if (!photo.webPath) return null;
+      const response = await fetch(photo.webPath);
+      const blob = await response.blob();
+      return new File([blob], `capture_${Date.now()}.jpg`, { type: 'image/jpeg' });
+    } catch (e) {
+      console.warn('[ImageService] Capacitor camera failed, falling back to HTML:', e);
+      return this.captureViaHTML(source === CameraSource.Camera ? 'environment' : undefined);
+    }
+  }
+
+  /** HTML file input fallback */
+  private captureViaHTML(capture?: string): Promise<File | null> {
     return new Promise((resolve) => {
       const input = document.createElement('input');
       input.type = 'file';
       input.accept = 'image/*';
+      if (capture) input.capture = capture;
 
       input.onchange = (e) => {
         const target = e.target as HTMLInputElement;

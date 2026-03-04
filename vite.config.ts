@@ -1,8 +1,14 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
+import { readFileSync } from 'fs';
+
+const pkg = JSON.parse(readFileSync('./package.json', 'utf-8'));
 
 export default defineConfig({
+  define: {
+    __APP_VERSION__: JSON.stringify(pkg.version),
+  },
   plugins: [
     react(),
     VitePWA({
@@ -84,13 +90,13 @@ export default defineConfig({
         target: 'https://api-doc.core-stack.org',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api\/corestack/, '/api/v1'),
-        secure: true
+        secure: false
       },
       '/api/geoserver': {
         target: 'https://geoserver.core-stack.org:8443',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api\/geoserver/, '/geoserver'),
-        secure: true
+        secure: false
       },
       '/api/dw': {
         target: 'http://localhost:8787',

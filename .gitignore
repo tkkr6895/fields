@@ -50,6 +50,13 @@ Thumbs.db
 logs/
 *.log
 npm-debug.log*
+grid-gen-log.txt
+
+# Claude temp files
+tmpclaude-*
+
+# Python virtual environment
+.venv/
 
 # Test coverage
 coverage/

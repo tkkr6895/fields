@@ -126,107 +126,83 @@ const LocationInfoPanel: React.FC<LocationInfoPanelProps> = ({ location, isOnlin
       // 2. Fetch LULC data - Dynamic World (POINT-SPECIFIC only)
       try {
         const locationLabel = `${location.lat.toFixed(5)}°N, ${location.lon.toFixed(5)}°E`;
+        const sourceStatus = dynamicWorldService.getDataSourceStatus();
 
-        // Always show something useful, but never pretend regional stats are point-specific.
-        await dynamicWorldService.loadCachedData();
-        const regional = dynamicWorldService.getRegionalStats();
+        // Load offline data first (for fallback)
+        await dynamicWorldService.loadOfflineData();
 
-        if (!isOnline) {
+        // Try to get point-specific data (live or offline)
+        const pointData = await dynamicWorldService.fetchPointData(location.lat, location.lon);
+        
+        if (pointData) {
+          // Format top probabilities
+          const topProbs = Object.entries(pointData.probabilities || {})
+            .filter(([, v]) => Number(v) > 0.01) // Only show >1%
+            .sort((a, b) => Number(b[1]) - Number(a[1]))
+            .slice(0, 5)
+            .reduce<Record<string, unknown>>((acc, [k, v]) => {
+              acc[k] = `${(Number(v) * 100).toFixed(1)}%`;
+              return acc;
+            }, {});
+
+          // Get class color for visual indicator
+          const classInfo = dynamicWorldService.getClassInfoByName(pointData.landCoverClass);
+          
           setSections(prev => ({
             ...prev,
             dynamicWorld: {
               ...prev.dynamicWorld,
-              status: 'offline',
+              status: 'loaded',
               data: {
+                '📊 Source': pointData.source === 'live' 
+                  ? 'Dynamic World (GEE Live)' 
+                  : 'Dynamic World (Offline Grid)',
                 '📍 Location': locationLabel,
-                'ℹ️ Status': 'Offline - live Dynamic World requires internet',
-                '── Regional context (NOT point-specific) ──': '',
-                ...(regional
-                  ? {
-                      'Region': 'Western Ghats (average)',
-                      'Year': regional.year,
-                      'Trees': `${regional.trees.toFixed(1)}%`,
-                      'Crops': `${regional.crops.toFixed(1)}%`,
-                      'Built': `${regional.built.toFixed(1)}%`,
-                      'Water': `${regional.water.toFixed(1)}%`
-                    }
-                  : { 'Regional': 'Not available locally' }),
-                '📶 Action': 'Connect to internet for live GEE point results'
-              }
-            }
-          }));
-        } else if (!dynamicWorldService.isPointDataAvailable()) {
-          setSections(prev => ({
-            ...prev,
-            dynamicWorld: {
-              ...prev.dynamicWorld,
-              status: 'offline',
-              data: {
-                '📍 Location': locationLabel,
-                'ℹ️ Status': 'Live Dynamic World not configured',
-                '── Regional context (NOT point-specific) ──': '',
-                ...(regional
-                  ? {
-                      'Region': 'Western Ghats (average)',
-                      'Year': regional.year,
-                      'Trees': `${regional.trees.toFixed(1)}%`,
-                      'Crops': `${regional.crops.toFixed(1)}%`,
-                      'Built': `${regional.built.toFixed(1)}%`,
-                      'Water': `${regional.water.toFixed(1)}%`
-                    }
-                  : { 'Regional': 'Not available locally' }),
-                '✅ Note': 'Regional stats are shown ONLY as context',
-                '🔧 Setup': 'Set VITE_DW_GEE_PROXY_URL and run the GEE proxy'
+                '📏 Resolution': pointData.resolution || '~10m',
+                '🗓️ Timestamp': pointData.timestamp,
+                '── Land Cover ──': '',
+                '🏷️ Class': pointData.landCoverClass,
+                '🎨 Color': classInfo?.color || '#888',
+                '📝 Description': classInfo?.description || '',
+                '🎯 Confidence': `${(pointData.confidence * 100).toFixed(1)}%`,
+                ...(Object.keys(topProbs).length > 0 ? { '── Class Probabilities ──': '', ...topProbs } : {})
               }
             }
           }));
         } else {
-          const pointData = await dynamicWorldService.fetchPointData(location.lat, location.lon);
-          if (!pointData) {
-            setSections(prev => ({
-              ...prev,
-              dynamicWorld: {
-                ...prev.dynamicWorld,
-                status: 'error',
-                data: {
-                  '📍 Location': locationLabel,
-                  '⚠️ Status': 'No live point result returned',
-                  'ℹ️ Note': 'Check the GEE proxy `/healthz` and proxy logs'
-                }
+          // No point data available
+          setSections(prev => ({
+            ...prev,
+            dynamicWorld: {
+              ...prev.dynamicWorld,
+              status: sourceStatus.mode === 'unavailable' ? 'offline' : 'error',
+              data: {
+                '📍 Location': locationLabel,
+                '⚠️ Status': sourceStatus.mode === 'unavailable' 
+                  ? 'No Dynamic World data available'
+                  : 'Location outside coverage area',
+                'ℹ️ Mode': sourceStatus.message,
+                ...(sourceStatus.coverage ? { '🗺️ Coverage': sourceStatus.coverage } : {}),
+                ...(sourceStatus.mode === 'unavailable' ? {
+                  '── Setup Options ──': '',
+                  '1️⃣ Live': 'Run `npm run dev:dw-proxy` with GEE credentials',
+                  '2️⃣ Offline': 'Generate grid data with `python scripts/generate-dw-grid.py`'
+                } : {})
               }
-            }));
-          } else {
-            const topProbs = Object.entries(pointData.probabilities || {})
-              .sort((a, b) => Number(b[1]) - Number(a[1]))
-              .slice(0, 5)
-              .reduce<Record<string, unknown>>((acc, [k, v]) => {
-                acc[k] = `${(Number(v) * 100).toFixed(1)}%`;
-                return acc;
-              }, {});
-
-            setSections(prev => ({
-              ...prev,
-              dynamicWorld: {
-                ...prev.dynamicWorld,
-                status: 'loaded',
-                data: {
-                  '📊 Source': 'Dynamic World (GEE live point)',
-                  '📍 Location': `${pointData.lat.toFixed(5)}°N, ${pointData.lon.toFixed(5)}°E`,
-                  '🗓️ Timestamp': pointData.timestamp,
-                  '🏷️ Class': pointData.landCoverClass,
-                  '🎯 Confidence': `${(pointData.confidence * 100).toFixed(1)}%`,
-                  '── Top probabilities ──': '',
-                  ...topProbs
-                }
-              }
-            }));
-          }
+            }
+          }));
         }
       } catch (err) {
         console.error('LULC data error:', err);
         setSections(prev => ({
           ...prev,
-          dynamicWorld: { ...prev.dynamicWorld, status: 'error', data: null }
+          dynamicWorld: { 
+            ...prev.dynamicWorld, 
+            status: 'error', 
+            data: { 
+              '⚠️ Error': err instanceof Error ? err.message : 'Failed to fetch land cover data'
+            } 
+          }
         }));
       }
 

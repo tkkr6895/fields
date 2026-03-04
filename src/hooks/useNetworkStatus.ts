@@ -1,10 +1,21 @@
 /**
- * Network Status Hook
+ * Network Status Hook (Task 1.6.2)
  * 
  * Provides reactive network status tracking for online/offline mode.
+ * Uses @capacitor/network on native platforms, browser API as fallback.
  */
 
 import { useState, useEffect, useCallback } from 'react';
+import { Network } from '@capacitor/network';
+
+/** Detect Capacitor native platform at runtime */
+function isNativePlatform(): boolean {
+  return Boolean(
+    (globalThis as any)?.Capacitor &&
+    typeof (globalThis as any).Capacitor.isNativePlatform === 'function' &&
+    (globalThis as any).Capacitor.isNativePlatform()
+  );
+}
 
 export interface NetworkStatus {
   isOnline: boolean;
@@ -62,6 +73,14 @@ export function useNetworkStatus(): NetworkStatus {
       connection.addEventListener('change', handleConnectionChange);
     }
 
+    // Task 1.6.2: Capacitor Network plugin listener (supplements browser API)
+    let capListenerHandle: { remove: () => Promise<void> } | undefined;
+    if (isNativePlatform()) {
+      Network.addListener('networkStatusChange', (s) => {
+        setStatus(prev => ({ ...prev, isOnline: s.connected }));
+      }).then(handle => { capListenerHandle = handle; });
+    }
+
     return () => {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
@@ -69,6 +88,8 @@ export function useNetworkStatus(): NetworkStatus {
       if (connection) {
         connection.removeEventListener('change', handleConnectionChange);
       }
+
+      capListenerHandle?.remove();
     };
   }, [getNetworkStatus]);
 

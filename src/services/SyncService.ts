@@ -1,5 +1,9 @@
 /**
- * Sync Service
+ * @deprecated — Use SyncEngine.ts instead. This file is kept for reference only.
+ * SyncEngine provides unified enrichment (Weather + Dynamic World + CoreStack),
+ * persistent queue with retry logic, and auto-sync. See Task 1.4.8.
+ *
+ * Sync Service (LEGACY)
  * 
  * Manages synchronization between offline data and online APIs.
  * Handles queuing observations for upload and enriching with CoreStack data.

@@ -10,13 +10,17 @@ import CaptureModal from './components/CaptureModal';
 import FieldLog from './components/FieldLog';
 import FieldProtocols from './components/FieldProtocols';
 import SpeciesGuide from './components/SpeciesGuide';
+import SettingsPanel from './components/SettingsPanel';
+import CustomLayerImporter from './components/customlayers/CustomLayerImporter';
+import CustomLayerStyleEditor from './components/customlayers/CustomLayerStyleEditor';
 import { useNetworkStatus } from './hooks/useNetworkStatus';
 import { DatasetManager } from './services/DatasetManager';
 import { rasterLayerService } from './services/RasterLayerService';
 import { tileLayerService } from './services/TileLayerService';
 import { GeoLocationService } from './services/GeoLocationService';
-import { db } from './db/database';
-import type { LocationData, Observation, DatasetLayer, DatasetValues } from './types';
+import { syncEngine } from './services/SyncEngine';
+import { db, getCustomLayers, updateCustomLayer as dbUpdateCustomLayer, deleteCustomLayer as dbDeleteCustomLayer } from './db/database';
+import type { LocationData, Observation, DatasetLayer, DatasetValues, CustomLayer, CustomLayerStyle } from './types';
 import './styles/global.css';
 
 type TabType = 'map' | 'layers' | 'protocols' | 'log';
@@ -38,6 +42,9 @@ function App() {
     return initial;
   });
   const [coreStackLayers, setCoreStackLayers] = useState<CoreStackLayer[]>([]);
+  const [customLayers, setCustomLayers] = useState<CustomLayer[]>([]);
+  const [showLayerImporter, setShowLayerImporter] = useState(false);
+  const [editingCustomLayer, setEditingCustomLayer] = useState<CustomLayer | null>(null);
   
   // Navigation state
   const [activeTab, setActiveTab] = useState<TabType>('map');
@@ -103,12 +110,35 @@ function App() {
     };
     loadLayers();
     
-    // Count pending observations
+    // Count pending observations (v2 uses syncStatus field)
     const countPending = async () => {
-      const pending = await db.observations.where('synced').equals(0).count();
-      setPendingSync(pending);
+      try {
+        const pending = await db.observations
+          .where('syncStatus')
+          .anyOf(['pending', 'queued', 'failed'])
+          .count();
+        setPendingSync(pending);
+      } catch {
+        // Fallback: count all observations (no index available)
+        const total = await db.observations.count();
+        setPendingSync(total);
+      }
     };
     countPending();
+
+    // Load custom layers from IndexedDB
+    const loadCustomLayers = async () => {
+      try {
+        const cls = await getCustomLayers();
+        setCustomLayers(cls);
+      } catch (err) {
+        console.error('Failed to load custom layers:', err);
+      }
+    };
+    loadCustomLayers();
+
+    // Start SyncEngine auto-sync (Task 1.4.6)
+    syncEngine.startAutoSync();
     
     // Start location watch
     geoService.current.watchPosition((loc) => {
@@ -242,6 +272,40 @@ function App() {
     }
   }, [currentLocation]);
 
+  // ─── Custom Layer Handlers (Task 1.8.13) ───────────────────
+  const handleToggleCustomLayer = useCallback((layerId: string) => {
+    setCustomLayers(prev =>
+      prev.map(cl =>
+        cl.id === layerId ? { ...cl, enabled: !(cl.enabled ?? true) } : cl
+      )
+    );
+    // Persist toggle
+    const layer = customLayers.find(l => l.id === layerId);
+    if (layer) {
+      dbUpdateCustomLayer(layerId, { enabled: !(layer.enabled ?? true) }).catch(console.error);
+    }
+  }, [customLayers]);
+
+  const handleDeleteCustomLayer = useCallback(async (layerId: string) => {
+    if (!confirm('Delete this custom layer?')) return;
+    await dbDeleteCustomLayer(layerId);
+    setCustomLayers(prev => prev.filter(l => l.id !== layerId));
+  }, []);
+
+  const handleCustomLayerStyleSave = useCallback(async (style: CustomLayerStyle) => {
+    if (!editingCustomLayer) return;
+    await dbUpdateCustomLayer(editingCustomLayer.id, { style });
+    setCustomLayers(prev =>
+      prev.map(cl => cl.id === editingCustomLayer.id ? { ...cl, style } : cl)
+    );
+    setEditingCustomLayer(null);
+  }, [editingCustomLayer]);
+
+  const handleLayerImported = useCallback((layer: CustomLayer) => {
+    setCustomLayers(prev => [layer, ...prev]);
+    setShowLayerImporter(false);
+  }, []);
+
   // Render panel content
   const renderPanel = () => {
     switch (activeTab) {
@@ -257,6 +321,11 @@ function App() {
             selectedLocation={searchedLocation ? { lat: searchedLocation.lat, lon: searchedLocation.lon } : undefined}
             onLoadCoreStackAtPoint={handleLoadCoreStackAtPoint}
             onLoadCoreStackByAdmin={handleLoadCoreStackByAdmin}
+            customLayers={customLayers}
+            onToggleCustomLayer={handleToggleCustomLayer}
+            onEditCustomLayerStyle={(layer) => setEditingCustomLayer(layer)}
+            onDeleteCustomLayer={handleDeleteCustomLayer}
+            onImportLayer={() => setShowLayerImporter(true)}
           />
         );
       case 'protocols':
@@ -399,6 +468,26 @@ function App() {
           activeLayerIds={[...activeLayers]}
           mapClickInfo={lastClickInfo}
           onClose={() => setShowLocationInfo(false)}
+        />
+      )}
+
+      {settingsOpen && (
+        <SettingsPanel onClose={() => setSettingsOpen(false)} />
+      )}
+
+      {/* Custom Layer Modals (Task 1.8) */}
+      {showLayerImporter && (
+        <CustomLayerImporter
+          onImported={handleLayerImported}
+          onCancel={() => setShowLayerImporter(false)}
+        />
+      )}
+
+      {editingCustomLayer && (
+        <CustomLayerStyleEditor
+          layer={editingCustomLayer}
+          onSave={handleCustomLayerStyleSave}
+          onCancel={() => setEditingCustomLayer(null)}
         />
       )}
     </div>

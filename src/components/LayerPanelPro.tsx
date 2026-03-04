@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import type { DatasetLayer } from '../types';
+import type { DatasetLayer, CustomLayer } from '../types';
 
 // Import CoreStackLayer type
 interface CoreStackLayer {
@@ -24,6 +24,12 @@ interface LayerPanelProps {
   selectedLocation?: { lat: number; lon: number };
   onLoadCoreStackAtPoint?: (lat: number, lon: number) => Promise<void>;
   onLoadCoreStackByAdmin?: (state: string, district: string, tehsil: string) => Promise<void>;
+  // Custom layers (Task 1.8.11-12)
+  customLayers?: CustomLayer[];
+  onToggleCustomLayer?: (layerId: string) => void;
+  onEditCustomLayerStyle?: (layer: CustomLayer) => void;
+  onDeleteCustomLayer?: (layerId: string) => void;
+  onImportLayer?: () => void;
 }
 
 // Layer category configuration
@@ -99,7 +105,12 @@ const LayerPanelPro: React.FC<LayerPanelProps> = ({
   mapCenter,
   selectedLocation,
   onLoadCoreStackAtPoint,
-  onLoadCoreStackByAdmin
+  onLoadCoreStackByAdmin,
+  customLayers = [],
+  onToggleCustomLayer,
+  onEditCustomLayerStyle,
+  onDeleteCustomLayer,
+  onImportLayer,
 }) => {
   const [viewMode, setViewMode] = useState<ViewMode>('categories');
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set(['forest', 'boundary']));
@@ -627,6 +638,97 @@ const LayerPanelPro: React.FC<LayerPanelProps> = ({
               </div>
             )}
             
+            {/* My Layers (Custom Layers) Section — Task 1.8.11 */}
+            {(customLayers.length > 0 || onImportLayer) && (
+              <div className={`lp-category ${expandedCategories.has('custom-layers') ? 'expanded' : ''}`}>
+                <button className="lp-category-header" onClick={() => toggleCategory('custom-layers')}>
+                  <span className="lp-cat-icon" style={{ backgroundColor: '#ab47bc25', color: '#ab47bc' }}>
+                    📂
+                  </span>
+                  <div className="lp-cat-info">
+                    <span className="lp-cat-name">My Layers</span>
+                    <span className="lp-cat-desc">Imported custom datasets</span>
+                  </div>
+                  <div className="lp-cat-right">
+                    <span className="lp-cat-count" style={{ backgroundColor: '#ab47bc30', color: '#ab47bc' }}>
+                      {customLayers.filter(l => l.enabled).length}/{customLayers.length}
+                    </span>
+                    <svg
+                      className={`lp-chevron ${expandedCategories.has('custom-layers') ? 'open' : ''}`}
+                      viewBox="0 0 24 24" width="20" height="20" fill="currentColor"
+                    >
+                      <path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6z"/>
+                    </svg>
+                  </div>
+                </button>
+
+                {expandedCategories.has('custom-layers') && (
+                  <div className="lp-category-content">
+                    {customLayers.length === 0 && (
+                      <div className="lp-empty" style={{ padding: '12px 16px', fontSize: 13 }}>
+                        No custom layers imported yet.
+                      </div>
+                    )}
+                    <div className="lp-layer-list">
+                      {customLayers.map(cl => {
+                        const isActive = cl.enabled ?? false;
+                        return (
+                          <div
+                            key={cl.id}
+                            className={`layer-item-pro ${isActive ? 'active' : ''}`}
+                            onClick={() => onToggleCustomLayer?.(cl.id)}
+                          >
+                            <div className={`layer-checkbox ${isActive ? 'checked' : ''}`}>
+                              {isActive && (
+                                <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
+                                  <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
+                                </svg>
+                              )}
+                            </div>
+                            <div className="layer-info">
+                              <span className="layer-title">{cl.title}</span>
+                              <span className="layer-subtitle">
+                                <span className="layer-badge year">{cl.featureCount} features</span>
+                                <span className="layer-badge raster">{cl.geometryType}</span>
+                              </span>
+                            </div>
+                            <div style={{ display: 'flex', gap: 4, marginLeft: 'auto' }}>
+                              {onEditCustomLayerStyle && (
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); onEditCustomLayerStyle(cl); }}
+                                  style={{ background: 'none', border: 'none', color: '#888', cursor: 'pointer', fontSize: 14, padding: '2px 4px' }}
+                                  title="Edit style"
+                                >🎨</button>
+                              )}
+                              {onDeleteCustomLayer && (
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); onDeleteCustomLayer(cl.id); }}
+                                  style={{ background: 'none', border: 'none', color: '#ff6b6b', cursor: 'pointer', fontSize: 14, padding: '2px 4px' }}
+                                  title="Delete layer"
+                                >🗑️</button>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    {onImportLayer && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); onImportLayer(); }}
+                        style={{
+                          display: 'flex', alignItems: 'center', gap: 6, width: '100%', padding: '10px 16px',
+                          background: '#1a1d23', border: '1px dashed #555', borderRadius: 8, color: '#aaa',
+                          cursor: 'pointer', fontSize: 13, marginTop: 8,
+                        }}
+                      >
+                        ➕ Import Layer
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
             {CATEGORY_ORDER.map(catId => {
               const categoryLayers = groupedLayers[catId];
               if (!categoryLayers || categoryLayers.length === 0) return null;
@@ -720,6 +822,15 @@ const LayerPanelPro: React.FC<LayerPanelProps> = ({
         >
           Clear All
         </button>
+        {onImportLayer && (
+          <button 
+            className="lp-footer-btn"
+            onClick={onImportLayer}
+            style={{ background: '#ab47bc30', color: '#ab47bc' }}
+          >
+            + Import
+          </button>
+        )}
       </div>
     </div>
   );

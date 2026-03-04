@@ -218,6 +218,8 @@ export class DatasetManager {
   private manifest: DatasetManifest;
   private loadedData: Map<string, unknown> = new Map();
   private geojsonLayers: Map<string, GeoJSON.FeatureCollection> = new Map();
+  /** Custom layer GeoJSON data registered at runtime (Task 1.8.14) */
+  private customLayerData: Map<string, GeoJSON.FeatureCollection> = new Map();
 
   constructor() {
     this.manifest = DEFAULT_MANIFEST;
@@ -314,6 +316,16 @@ export class DatasetManager {
     return this.geojsonLayers.get(layerId);
   }
 
+  /** Register a custom layer's GeoJSON for point queries (Task 1.8.14) */
+  registerCustomLayerData(customLayerId: string, data: GeoJSON.FeatureCollection): void {
+    this.customLayerData.set(`custom_${customLayerId}`, data);
+  }
+
+  /** Unregister a custom layer */
+  unregisterCustomLayerData(customLayerId: string): void {
+    this.customLayerData.delete(`custom_${customLayerId}`);
+  }
+
   async getValuesAtPoint(
     lat: number, 
     lon: number, 
@@ -381,6 +393,36 @@ export class DatasetManager {
       }
     }
 
+    return values;
+  }
+
+  /** Query custom layers at a point (Task 1.8.14) */
+  getCustomLayerValuesAtPoint(lat: number, lon: number): DatasetValues {
+    const values: DatasetValues = {};
+    const point = turf.point([lon, lat]);
+
+    for (const [layerId, geojson] of this.customLayerData.entries()) {
+      values[layerId] = {};
+      for (const feature of geojson.features) {
+        if (!feature.geometry) continue;
+        const gType = feature.geometry.type;
+        if (gType === 'Point' || gType === 'MultiPoint') {
+          // Simple proximity — check within ~100m
+          const dist = turf.distance(point, turf.point(
+            (feature.geometry as GeoJSON.Point).coordinates
+          ), { units: 'meters' });
+          if (dist < 100) {
+            values[layerId] = { ...feature.properties };
+            break;
+          }
+        } else if (gType === 'Polygon' || gType === 'MultiPolygon') {
+          if (turf.booleanPointInPolygon(point, feature as turf.Feature<turf.Polygon | turf.MultiPolygon>)) {
+            values[layerId] = { ...feature.properties };
+            break;
+          }
+        }
+      }
+    }
     return values;
   }
 

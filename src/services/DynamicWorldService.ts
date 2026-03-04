@@ -1,44 +1,69 @@
 /**
  * Dynamic World Service
  * 
- * Provides access to Dynamic World LULC data.
- * Uses local cached data when offline, fetches from API when online.
+ * Provides POINT-SPECIFIC access to Dynamic World LULC data.
+ * 
+ * Data sources (in order of preference):
+ * 1. Live GEE proxy - Real-time point queries via Google Earth Engine
+ * 2. Pre-bundled grid data - Offline point-specific data at ~100m resolution
+ * 
+ * NO regional/aggregate statistics are shown - only actual point data.
  */
 
-// Dynamic World land cover classes
-export const DW_CLASSES = {
-  0: { name: 'Water', color: '#419BDF' },
-  1: { name: 'Trees', color: '#397D49' },
-  2: { name: 'Grass', color: '#88B053' },
-  3: { name: 'Flooded Vegetation', color: '#7A87C6' },
-  4: { name: 'Crops', color: '#E49635' },
-  5: { name: 'Shrub and Scrub', color: '#DFC35A' },
-  6: { name: 'Built', color: '#C4281B' },
-  7: { name: 'Bare', color: '#A59B8F' },
-  8: { name: 'Snow and Ice', color: '#B39FE1' }
-} as const;
+// Dynamic World land cover classes with metadata
+export const DW_CLASSES: Record<number, { name: string; color: string; description: string }> = {
+  0: { name: 'Water', color: '#419BDF', description: 'Open water bodies, rivers, lakes' },
+  1: { name: 'Trees', color: '#397D49', description: 'Forest, woodland, dense tree cover' },
+  2: { name: 'Grass', color: '#88B053', description: 'Grassland, pasture, low vegetation' },
+  3: { name: 'Flooded Vegetation', color: '#7A87C6', description: 'Wetlands, marshes, mangroves' },
+  4: { name: 'Crops', color: '#E49635', description: 'Agricultural land, cultivated areas' },
+  5: { name: 'Shrub and Scrub', color: '#DFC35A', description: 'Shrubland, sparse vegetation' },
+  6: { name: 'Built', color: '#C4281B', description: 'Urban areas, buildings, infrastructure' },
+  7: { name: 'Bare', color: '#A59B8F', description: 'Bare soil, rock, sand' },
+  8: { name: 'Snow and Ice', color: '#B39FE1', description: 'Permanent snow/ice cover' }
+};
 
-export interface DynamicWorldData {
-  year: number;
-  month: string;
-  water: number;
-  trees: number;
-  grass: number;
-  floodedVegetation: number;
-  crops: number;
-  shrubAndScrub: number;
-  built: number;
-  bare: number;
-  snowAndIce: number;
-}
+// Class name to ID mapping
+export const DW_CLASS_NAME_TO_ID: Record<string, number> = {
+  'water': 0, 'Water': 0,
+  'trees': 1, 'Trees': 1,
+  'grass': 2, 'Grass': 2,
+  'flooded_vegetation': 3, 'Flooded Vegetation': 3,
+  'crops': 4, 'Crops': 4,
+  'shrub_and_scrub': 5, 'Shrub and Scrub': 5,
+  'built': 6, 'Built': 6,
+  'bare': 7, 'Bare': 7,
+  'snow_and_ice': 8, 'Snow and Ice': 8
+};
 
 export interface DynamicWorldPointData {
   lat: number;
   lon: number;
   timestamp: string;
   landCoverClass: string;
+  landCoverClassId: number;
   confidence: number;
   probabilities: Record<string, number>;
+  source: 'live' | 'offline';
+  resolution?: string;
+}
+
+// Pre-bundled grid data format
+interface OfflineGridCell {
+  lat: number;
+  lon: number;
+  classId: number;
+  confidence: number;
+  probs?: number[]; // Array of 9 probabilities in class order
+}
+
+interface OfflineGridManifest {
+  version: string;
+  timestamp: string;
+  bounds: { north: number; south: number; east: number; west: number };
+  resolution: number; // meters
+  cellCount: number;
+  year: number;
 }
 
 interface DynamicWorldMapIdResponse {
@@ -48,8 +73,10 @@ interface DynamicWorldMapIdResponse {
 }
 
 class DynamicWorldService {
-  private cachedData: DynamicWorldData[] = [];
-  private dataLoaded: boolean = false;
+  private offlineGrid: OfflineGridCell[] = [];
+  private offlineManifest: OfflineGridManifest | null = null;
+  private offlineLoaded: boolean = false;
+  private offlineLoading: Promise<void> | null = null;
   private mapIdCache: Map<string, DynamicWorldMapIdResponse> = new Map();
 
   private getProxyBaseUrl(): string | null {
@@ -66,144 +93,203 @@ class DynamicWorldService {
   }
 
   /**
-   * Load cached Dynamic World data from local files
+   * Load pre-bundled offline grid data
    */
-  async loadCachedData(): Promise<void> {
-    if (this.dataLoaded) return;
+  async loadOfflineData(): Promise<void> {
+    if (this.offlineLoaded) return;
+    if (this.offlineLoading) return this.offlineLoading;
 
+    this.offlineLoading = this._loadOfflineDataInternal();
+    return this.offlineLoading;
+  }
+
+  private async _loadOfflineDataInternal(): Promise<void> {
     try {
-      const response = await fetch('/data/dynamicworld/wg_dynamic_world_2018_2025.csv');
-      if (!response.ok) {
-        console.warn('Dynamic World data not found locally');
+      // Load manifest first
+      const manifestResponse = await fetch('/data/dynamicworld/grid-manifest.json');
+      if (!manifestResponse.ok) {
+        console.warn('[DynamicWorld] Offline grid manifest not found');
         return;
       }
+      this.offlineManifest = await manifestResponse.json();
+      console.log('[DynamicWorld] Loaded offline manifest:', this.offlineManifest);
 
-      const text = await response.text();
-      const lines = text.trim().split('\n');
-      // First line is header, skip it
-
-      this.cachedData = lines.slice(1).map(line => {
-        const values = line.split(',');
-        return {
-          year: parseInt(values[0]),
-          month: values[2],
-          water: parseFloat(values[3]),
-          trees: parseFloat(values[4]),
-          grass: parseFloat(values[5]),
-          floodedVegetation: parseFloat(values[6]),
-          crops: parseFloat(values[7]),
-          shrubAndScrub: parseFloat(values[8]),
-          built: parseFloat(values[9]),
-          bare: parseFloat(values[10]),
-          snowAndIce: parseFloat(values[11])
-        };
-      });
-
-      this.dataLoaded = true;
-      console.log(`Loaded ${this.cachedData.length} Dynamic World records`);
+      // Load grid data
+      const gridResponse = await fetch('/data/dynamicworld/grid-data.json');
+      if (!gridResponse.ok) {
+        console.warn('[DynamicWorld] Offline grid data not found');
+        return;
+      }
+      this.offlineGrid = await gridResponse.json();
+      this.offlineLoaded = true;
+      console.log(`[DynamicWorld] Loaded ${this.offlineGrid.length} offline grid points`);
     } catch (error) {
-      console.error('Failed to load Dynamic World data:', error);
+      console.error('[DynamicWorld] Failed to load offline data:', error);
     }
   }
 
   /**
-   * Get regional Dynamic World statistics for a year
+   * Check if offline data is available
    */
-  getRegionalStats(year?: number): DynamicWorldData | null {
-    if (!this.dataLoaded || this.cachedData.length === 0) return null;
+  hasOfflineData(): boolean {
+    return this.offlineLoaded && this.offlineGrid.length > 0;
+  }
 
-    if (year) {
-      return this.cachedData.find(d => d.year === year) || null;
+  /**
+   * Check if live GEE proxy is configured
+   */
+  hasLiveAccess(): boolean {
+    return this.getProxyBaseUrl() !== null;
+  }
+
+  /**
+   * Get point data from offline grid using nearest neighbor
+   */
+  private getOfflinePointData(lat: number, lon: number): DynamicWorldPointData | null {
+    if (!this.offlineLoaded || this.offlineGrid.length === 0) return null;
+
+    // Check if point is within bounds
+    if (this.offlineManifest) {
+      const { bounds } = this.offlineManifest;
+      if (lat < bounds.south || lat > bounds.north || lon < bounds.west || lon > bounds.east) {
+        return null; // Point outside coverage area
+      }
     }
 
-    // Return most recent year
-    return this.cachedData[this.cachedData.length - 1];
-  }
+    // Find nearest grid point (simple linear search - could be optimized with spatial index)
+    let nearest: OfflineGridCell | null = null;
+    let minDist = Infinity;
 
-  /**
-   * Get all available years
-   */
-  getAvailableYears(): number[] {
-    return this.cachedData.map(d => d.year);
-  }
+    for (const cell of this.offlineGrid) {
+      const dlat = cell.lat - lat;
+      const dlon = cell.lon - lon;
+      const dist = dlat * dlat + dlon * dlon;
+      if (dist < minDist) {
+        minDist = dist;
+        nearest = cell;
+      }
+    }
 
-  /**
-   * Get time series data for a specific land cover class
-   */
-  getTimeSeries(className: keyof Omit<DynamicWorldData, 'year' | 'month'>): Array<{ year: number; value: number }> {
-    return this.cachedData.map(d => ({
-      year: d.year,
-      value: d[className] as number
-    }));
-  }
+    if (!nearest) return null;
 
-  /**
-   * Get change statistics between two years
-   */
-  getChangeStats(startYear: number, endYear: number): Record<string, { start: number; end: number; change: number; percentChange: number }> | null {
-    const startData = this.cachedData.find(d => d.year === startYear);
-    const endData = this.cachedData.find(d => d.year === endYear);
+    // Check if nearest point is within reasonable distance
+    // Use grid resolution from manifest (default 500m), with sqrt(2) factor for diagonal distance
+    const maxDistMeters = this.offlineManifest 
+      ? this.offlineManifest.resolution * 1.5  // 1.5x grid spacing (covers diagonal)
+      : 500;
+    const distMeters = Math.sqrt(minDist) * 111000; // rough conversion
+    if (distMeters > maxDistMeters) {
+      return null; // Too far from any grid point
+    }
 
-    if (!startData || !endData) return null;
-
-    const classes = ['water', 'trees', 'grass', 'floodedVegetation', 'crops', 'shrubAndScrub', 'built', 'bare', 'snowAndIce'] as const;
+    const className = DW_CLASSES[nearest.classId]?.name || 'Unknown';
     
-    const result: Record<string, { start: number; end: number; change: number; percentChange: number }> = {};
-    
-    for (const cls of classes) {
-      const start = startData[cls];
-      const end = endData[cls];
-      result[cls] = {
-        start,
-        end,
-        change: end - start,
-        percentChange: ((end - start) / start) * 100
-      };
+    // Build probabilities object
+    const probabilities: Record<string, number> = {};
+    if (nearest.probs && nearest.probs.length === 9) {
+      Object.values(DW_CLASSES).forEach((cls, idx) => {
+        probabilities[cls.name] = nearest.probs![idx];
+      });
+    } else {
+      // If no probabilities, set the dominant class to confidence value
+      Object.values(DW_CLASSES).forEach((cls, idx) => {
+        probabilities[cls.name] = idx === nearest.classId ? nearest.confidence : 0;
+      });
     }
 
-    return result;
+    return {
+      lat: nearest.lat,
+      lon: nearest.lon,
+      timestamp: this.offlineManifest?.timestamp || 'Unknown',
+      landCoverClass: className,
+      landCoverClassId: nearest.classId,
+      confidence: nearest.confidence,
+      probabilities,
+      source: 'offline',
+      resolution: this.offlineManifest ? `~${this.offlineManifest.resolution}m grid` : 'Unknown'
+    };
   }
 
   /**
    * Fetch Dynamic World data for a specific point
    * 
-   * IMPORTANT: Point-specific LULC data requires Google Earth Engine API integration.
-   * This is NOT available offline and requires a backend proxy.
-   * 
-   * This method returns NULL - it does NOT synthesize or estimate point data
-   * from regional statistics. That would be inaccurate and misleading.
-   * 
-   * For regional statistics, use getRegionalStats() instead.
+   * Tries live GEE proxy first, falls back to offline grid data.
+   * Returns NULL if no data available - never shows misleading regional stats.
    */
   async fetchPointData(lat: number, lon: number, date?: string): Promise<DynamicWorldPointData | null> {
+    // Try live GEE proxy first
     const base = this.getProxyBaseUrl();
-    if (!base) {
-      console.warn('[DynamicWorld] Live mode not configured. Set VITE_DW_GEE_PROXY_URL.');
-      return null;
+    if (base) {
+      try {
+        // If base is relative (e.g. '/api/dw'), make it absolute for URL constructor
+        const absoluteBase = base.startsWith('http') ? base : `${window.location.origin}${base}`;
+        const url = new URL(`${absoluteBase}/dynamicworld/point`);
+        url.searchParams.set('lat', String(lat));
+        url.searchParams.set('lon', String(lon));
+        if (date) url.searchParams.set('date', date);
+
+        const response = await fetch(url.toString(), { 
+          signal: AbortSignal.timeout(10000) // 10s timeout
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          if (data && typeof data.landCoverClass === 'string') {
+            return {
+              ...data,
+              landCoverClassId: DW_CLASS_NAME_TO_ID[data.landCoverClass] ?? -1,
+              source: 'live',
+              resolution: '10m (Sentinel-2)'
+            };
+          }
+        }
+      } catch (err) {
+        console.warn('[DynamicWorld] Live fetch failed, trying offline:', err);
+      }
     }
 
-    const url = new URL('/dynamicworld/point', base);
-    url.searchParams.set('lat', String(lat));
-    url.searchParams.set('lon', String(lon));
-    if (date) url.searchParams.set('date', date);
-
-    const response = await fetch(url.toString());
-    if (!response.ok) {
-      const text = await response.text().catch(() => '');
-      throw new Error(`Dynamic World proxy error (${response.status}): ${text || response.statusText}`);
-    }
-
-    const data = (await response.json()) as DynamicWorldPointData;
-    if (!data || typeof data.landCoverClass !== 'string') return null;
-    return data;
+    // Fall back to offline grid data
+    await this.loadOfflineData();
+    return this.getOfflinePointData(lat, lon);
   }
 
   /**
-   * Check if point-specific data is available
-   * True when a GEE proxy endpoint is configured.
+   * Check if point-specific data is potentially available
+   * (either via live proxy or offline grid)
    */
   isPointDataAvailable(): boolean {
-    return this.getProxyBaseUrl() !== null;
+    return this.hasLiveAccess() || this.hasOfflineData();
+  }
+
+  /**
+   * Get data source status for UI display
+   */
+  getDataSourceStatus(): {
+    mode: 'live' | 'offline' | 'unavailable';
+    message: string;
+    coverage?: string;
+  } {
+    if (this.hasLiveAccess()) {
+      return {
+        mode: 'live',
+        message: 'Real-time data via Google Earth Engine',
+        coverage: 'Global, 10m resolution'
+      };
+    }
+    
+    if (this.hasOfflineData() && this.offlineManifest) {
+      const { bounds, resolution, year } = this.offlineManifest;
+      return {
+        mode: 'offline',
+        message: `Pre-bundled ${year} data`,
+        coverage: `${bounds.south.toFixed(2)}°-${bounds.north.toFixed(2)}°N, ${bounds.west.toFixed(2)}°-${bounds.east.toFixed(2)}°E, ~${resolution}m grid`
+      };
+    }
+
+    return {
+      mode: 'unavailable',
+      message: 'No Dynamic World data available. Configure GEE proxy or generate offline grid.'
+    };
   }
 
   /**
@@ -218,57 +304,44 @@ class DynamicWorldService {
     const cached = this.mapIdCache.get(cacheKey);
     if (cached?.urlFormat) return cached.urlFormat;
 
-    const url = new URL('/dynamicworld/mapid', base);
-    if (date) url.searchParams.set('date', date);
+    try {
+      const absoluteBase = base.startsWith('http') ? base : `${window.location.origin}${base}`;
+      const url = new URL(`${absoluteBase}/dynamicworld/mapid`);
+      if (date) url.searchParams.set('date', date);
 
-    const response = await fetch(url.toString());
-    if (!response.ok) {
-      const text = await response.text().catch(() => '');
-      throw new Error(`Dynamic World proxy error (${response.status}): ${text || response.statusText}`);
+      const response = await fetch(url.toString(), {
+        signal: AbortSignal.timeout(15000)
+      });
+      if (!response.ok) {
+        const text = await response.text().catch(() => '');
+        throw new Error(`Dynamic World proxy error (${response.status}): ${text || response.statusText}`);
+      }
+
+      const data = (await response.json()) as DynamicWorldMapIdResponse;
+      if (!data?.urlFormat) return null;
+      this.mapIdCache.set(cacheKey, data);
+      return data.urlFormat;
+    } catch (err) {
+      console.error('[DynamicWorld] Failed to get tile URL:', err);
+      return null;
     }
-
-    const data = (await response.json()) as DynamicWorldMapIdResponse;
-    if (!data?.urlFormat) return null;
-    this.mapIdCache.set(cacheKey, data);
-    return data.urlFormat;
   }
 
   /**
-   * Get a clear message about data availability
+   * Get class info by ID
    */
-  getDataAvailabilityMessage(): string {
-    if (this.dataLoaded && this.cachedData.length > 0) {
-      const years = this.getAvailableYears();
-      return `Regional LULC data available for Western Ghats (${years[0]}-${years[years.length - 1]}). Point-specific data requires GEE API integration.`;
-    }
-    return 'No Dynamic World data available. Load regional data first.';
+  getClassInfo(classId: number): { name: string; color: string; description: string } | null {
+    return DW_CLASSES[classId] || null;
   }
 
   /**
-   * Get summary for display in location panel
+   * Get class info by name
    */
-  getSummaryForLocation(): Record<string, unknown> {
-    const latest = this.getRegionalStats();
-    if (!latest) return { status: 'No Dynamic World data available' };
-
-    const changeStats = this.getChangeStats(2018, latest.year);
-    
-    return {
-      source: 'Dynamic World (Google)',
-      year: latest.year,
-      month: latest.month,
-      landCover: {
-        trees: `${latest.trees.toFixed(1)} km²`,
-        crops: `${latest.crops.toFixed(1)} km²`,
-        built: `${latest.built.toFixed(1)} km²`,
-        shrubAndScrub: `${latest.shrubAndScrub.toFixed(1)} km²`
-      },
-      changesSince2018: changeStats ? {
-        trees: `${changeStats.trees.percentChange > 0 ? '+' : ''}${changeStats.trees.percentChange.toFixed(1)}%`,
-        built: `${changeStats.built.percentChange > 0 ? '+' : ''}${changeStats.built.percentChange.toFixed(1)}%`,
-        crops: `${changeStats.crops.percentChange > 0 ? '+' : ''}${changeStats.crops.percentChange.toFixed(1)}%`
-      } : null
-    };
+  getClassInfoByName(className: string): { name: string; color: string; description: string; id: number } | null {
+    const id = DW_CLASS_NAME_TO_ID[className];
+    if (id === undefined) return null;
+    const info = DW_CLASSES[id];
+    return info ? { ...info, id } : null;
   }
 }
 

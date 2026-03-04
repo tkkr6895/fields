@@ -13,6 +13,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { exportService, ExportProgress, ExportResult, ShareMethod } from '../services/ExportService';
+import { annotationExporter } from '../services/AnnotationExporter';
 import { db, dbReady } from '../db/database';
 import '../styles/DataExportPanel.css';
 
@@ -93,6 +94,54 @@ const DataExportPanel: React.FC<DataExportPanelProps> = ({ onClose, compact = fa
     setLastResult(null);
     const result = await exportService.exportObservationsOnly();
     setLastResult(result);
+  };
+
+  // GeoAI Export (Task 1.5.7)
+  const [geoAIExporting, setGeoAIExporting] = useState(false);
+  const handleGeoAIExport = async () => {
+    setGeoAIExporting(true);
+    setLastResult(null);
+    try {
+      const result = await annotationExporter.exportGeoAI({ includeImages: true, includeSTAC: true, includeCOCO: true, includeModelCard: true });
+      if (result.success && result.blob) {
+        downloadBlob(result.blob, result.fileName || 'fields_geoai_export.zip');
+        setLastResult({ success: true, filesExported: result.recordCount, observationCount: result.recordCount, imageCount: 0, timestamp: new Date().toISOString() });
+      } else {
+        setLastResult({ success: false, filesExported: 0, observationCount: 0, imageCount: 0, error: result.error || 'No data', timestamp: new Date().toISOString() });
+      }
+    } catch (e) {
+      setLastResult({ success: false, filesExported: 0, observationCount: 0, imageCount: 0, error: e instanceof Error ? e.message : String(e), timestamp: new Date().toISOString() });
+    }
+    setGeoAIExporting(false);
+  };
+
+  const handleSTACExport = async () => {
+    setGeoAIExporting(true);
+    setLastResult(null);
+    try {
+      const result = await annotationExporter.exportSTACOnly();
+      if (result.success && result.blob) {
+        downloadBlob(result.blob, result.fileName || 'fields_stac_export.zip');
+        setLastResult({ success: true, filesExported: result.recordCount, observationCount: result.recordCount, imageCount: 0, timestamp: new Date().toISOString() });
+      } else {
+        setLastResult({ success: false, filesExported: 0, observationCount: 0, imageCount: 0, error: result.error || 'No data', timestamp: new Date().toISOString() });
+      }
+    } catch (e) {
+      setLastResult({ success: false, filesExported: 0, observationCount: 0, imageCount: 0, error: e instanceof Error ? e.message : String(e), timestamp: new Date().toISOString() });
+    }
+    setGeoAIExporting(false);
+  };
+
+  /** Helper to trigger browser download of a Blob */
+  const downloadBlob = (blob: Blob, filename: string) => {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
 
   const isExporting = progress.stage !== 'idle' && progress.stage !== 'complete' && progress.stage !== 'error';
@@ -243,6 +292,38 @@ const DataExportPanel: React.FC<DataExportPanelProps> = ({ onClose, compact = fa
         <div className="export-options-section">
           <h3>Other Export Options</h3>
           
+          <div className="export-option-card" onClick={!isExporting && !geoAIExporting ? handleGeoAIExport : undefined}>
+            <div className="export-option-icon">🤖</div>
+            <div className="export-option-info">
+              <div className="export-option-title">GeoAI Export</div>
+              <div className="export-option-desc">
+                ML-ready ZIP: GeoJSON, CSV, STAC, COCO manifest, model card, SHA-256 checksums
+              </div>
+            </div>
+            <button 
+              className="export-option-btn"
+              disabled={isExporting || geoAIExporting || stats.observations === 0}
+            >
+              {geoAIExporting ? '⏳' : '→'}
+            </button>
+          </div>
+
+          <div className="export-option-card" onClick={!isExporting && !geoAIExporting ? handleSTACExport : undefined}>
+            <div className="export-option-icon">🛰️</div>
+            <div className="export-option-info">
+              <div className="export-option-title">STAC Export</div>
+              <div className="export-option-desc">
+                SpatioTemporal Asset Catalog items (no images, lightweight)
+              </div>
+            </div>
+            <button 
+              className="export-option-btn"
+              disabled={isExporting || geoAIExporting || stats.observations === 0}
+            >
+              {geoAIExporting ? '⏳' : '→'}
+            </button>
+          </div>
+
           <div className="export-option-card" onClick={!isExporting ? handleFullExport : undefined}>
             <div className="export-option-icon">💾</div>
             <div className="export-option-info">

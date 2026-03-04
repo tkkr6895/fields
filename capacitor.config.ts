@@ -22,7 +22,13 @@ const config: CapacitorConfig = {
     // Geolocation permissions
     Geolocation: {
       permissions: ['location', 'coarseLocation']
-    }
+    },
+    // Camera permissions (Task 1.6.3)
+    Camera: {
+      permissions: ['camera', 'photos']
+    },
+    // Network (Task 1.6.3) — no special config needed, just declared
+    Network: {}
   }
 };
 

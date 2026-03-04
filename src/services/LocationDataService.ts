@@ -116,7 +116,7 @@ class LocationDataService {
     await this.loadLocalCoreStackData();
     
     // Load Dynamic World cache
-    await dynamicWorldService.loadCachedData();
+    await dynamicWorldService.loadOfflineData();
     
     this.initialized = true;
   }

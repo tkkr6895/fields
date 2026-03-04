@@ -426,6 +426,17 @@ class ExportService {
       reader.readAsDataURL(blob);
     });
   }
+
+  // ─── Task 1.5.8: Delegate to AnnotationExporter ─────────────────
+
+  /**
+   * Convenience method: GeoAI export (delegates to AnnotationExporter).
+   * Maintained here for backward-compatible import from ExportService.
+   */
+  async exportGeoAI(options?: import('../services/AnnotationExporter').GeoAIExportOptions): Promise<import('../services/AnnotationExporter').ExportResult> {
+    const { annotationExporter } = await import('../services/AnnotationExporter');
+    return annotationExporter.exportGeoAI(options);
+  }
 }
 
 export const exportService = new ExportService();

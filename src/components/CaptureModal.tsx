@@ -3,7 +3,10 @@ import { v4 as uuidv4 } from 'uuid';
 import { imageService } from '../services/ImageService';
 import { GeoLocationService } from '../services/GeoLocationService';
 import { locationDataService, LocationEnrichment } from '../services/LocationDataService';
-import type { LocationData, Observation, ValidationStatus, DatasetValues, ImageData } from '../types';
+import { syncEngine } from '../services/SyncEngine';
+import { deriveSeason } from '../services/SeasonService';
+import { getDeviceId, getUserName } from '../services/DeviceService';
+import type { LocationData, Observation, ValidationStatus, DatasetValues, ImageData, ObservationType } from '../types';
 
 interface CaptureModalProps {
   currentLocation: LocationData | null;
@@ -29,6 +32,12 @@ const CaptureModal: React.FC<CaptureModalProps> = ({
   const [gettingLocation, setGettingLocation] = useState(false);
   const [locationSource, setLocationSource] = useState<'gps' | 'exif' | 'device' | null>(null);
   const [adminData, setAdminData] = useState<LocationEnrichment['admin'] | null>(null);
+
+  // v2 fields (Tasks 1.7.1–1.7.5)
+  const [observationType, setObservationType] = useState<ObservationType>('land_cover');
+  const [confidence, setConfidence] = useState<number>(3);
+  const [tagsInput, setTagsInput] = useState('');
+  const [tags, setTags] = useState<string[]>([]);
 
   // Get current location if not provided
   useEffect(() => {
@@ -144,7 +153,7 @@ const CaptureModal: React.FC<CaptureModalProps> = ({
   }, []);
 
   // Submit observation
-  const handleSubmit = useCallback(() => {
+  const handleSubmit = useCallback(async () => {
     if (!validation || !location) return;
 
     // Build region string from authentic admin data
@@ -156,14 +165,17 @@ const CaptureModal: React.FC<CaptureModalProps> = ({
       regionString = parts.length > 0 ? parts.join(', ') : 'Western Ghats';
     }
 
+    const now = new Date().toISOString();
+    const deviceId = getDeviceId();
+    const userId = getUserName() || deviceId;
+
     const observation: Observation = {
       id: uuidv4(),
-      timestamp: new Date().toISOString(),
+      timestamp: now,
       location: location,
       context: {
         region: regionString,
         areaMode: 'point',
-        // Store full admin details for reference
         adminData: adminData ? {
           state: adminData.state,
           district: adminData.district,
@@ -177,11 +189,26 @@ const CaptureModal: React.FC<CaptureModalProps> = ({
       image: imageData || undefined,
       userValidation: validation,
       notes: notes,
-      synced: false
+      // v2 fields (Tasks 1.7.1–1.7.6)
+      observationType,
+      confidence,
+      tags: tags.length > 0 ? tags : undefined,
+      season: deriveSeason(now),
+      userId,
+      deviceId,
+      synced: false,
+      syncStatus: 'pending',
     };
 
     onCapture(observation);
-  }, [validation, location, datasetValues, imageData, notes, onCapture, adminData]);
+
+    // Enqueue for background enrichment (Task 1.7.6)
+    try {
+      await syncEngine.enqueue(observation.id);
+    } catch (e) {
+      console.warn('[CaptureModal] Failed to enqueue for sync:', e);
+    }
+  }, [validation, location, datasetValues, imageData, notes, onCapture, adminData, observationType, confidence, tags]);
 
   return (
     <div className="capture-modal">
@@ -307,6 +334,93 @@ const CaptureModal: React.FC<CaptureModalProps> = ({
               </p>
             </div>
           )}
+        </div>
+
+        {/* Observation Type (Task 1.7.1) */}
+        <div style={{ marginBottom: '16px' }}>
+          <div className="dataset-values-title">Observation Type</div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+            {([
+              ['land_cover', '🌿 Land Cover'],
+              ['species_sighting', '🦎 Species'],
+              ['water_body', '💧 Water Body'],
+              ['restoration_site', '🌱 Restoration'],
+              ['general', '📋 General'],
+            ] as const).map(([val, label]) => (
+              <button
+                key={val}
+                onClick={() => setObservationType(val)}
+                style={{
+                  padding: '6px 12px',
+                  fontSize: '12px',
+                  borderRadius: '16px',
+                  border: observationType === val ? '2px solid var(--accent)' : '1px solid var(--border)',
+                  background: observationType === val ? 'var(--accent)' : 'var(--bg-tertiary)',
+                  color: observationType === val ? 'white' : 'var(--text-primary)',
+                  cursor: 'pointer',
+                }}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Confidence Slider (Task 1.7.2) */}
+        <div style={{ marginBottom: '16px' }}>
+          <div className="dataset-values-title">
+            Confidence: {confidence}/5
+          </div>
+          <input
+            type="range"
+            min={1}
+            max={5}
+            value={confidence}
+            onChange={e => setConfidence(Number(e.target.value))}
+            style={{ width: '100%', accentColor: 'var(--accent)' }}
+          />
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', color: 'var(--text-muted)' }}>
+            <span>Low</span><span>Medium</span><span>High</span>
+          </div>
+        </div>
+
+        {/* Tags Input (Task 1.7.3) */}
+        <div style={{ marginBottom: '16px' }}>
+          <div className="dataset-values-title">Tags</div>
+          <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: tags.length > 0 ? '6px' : 0 }}>
+            {tags.map((tag, i) => (
+              <span key={i} style={{
+                display: 'inline-flex', alignItems: 'center', padding: '4px 10px',
+                background: 'var(--bg-tertiary)', borderRadius: '12px', fontSize: '12px',
+                color: 'var(--text-secondary)', border: '1px solid var(--border)'
+              }}>
+                {tag}
+                <span
+                  onClick={() => setTags(tags.filter((_, idx) => idx !== i))}
+                  style={{ marginLeft: '6px', cursor: 'pointer', color: 'var(--error)' }}
+                >×</span>
+              </span>
+            ))}
+          </div>
+          <input
+            type="text"
+            placeholder="Type and press Enter to add tag..."
+            value={tagsInput}
+            onChange={e => setTagsInput(e.target.value)}
+            onKeyDown={e => {
+              if (e.key === 'Enter' || e.key === ',') {
+                e.preventDefault();
+                const t = tagsInput.trim().replace(/,$/,'');
+                if (t && !tags.includes(t)) setTags([...tags, t]);
+                setTagsInput('');
+              }
+            }}
+            style={{
+              width: '100%', padding: '8px 12px', background: 'var(--bg-tertiary)',
+              border: '1px solid var(--border)', borderRadius: '8px',
+              color: 'var(--text-primary)', fontSize: '13px', boxSizing: 'border-box',
+            }}
+          />
         </div>
 
         {/* Validation Buttons */}

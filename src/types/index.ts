@@ -6,7 +6,8 @@
 export type SyncStatus = 'pending' | 'queued' | 'syncing' | 'synced' | 'failed';
 
 /** 1.2.2 — Observation categories */
-export type ObservationType = 'land_cover' | 'species_sighting' | 'water_body' | 'restoration_site' | 'general';
+export type ObservationType = 'land_cover' | 'species_sighting' | 'water_body' | 'restoration_site' | 'general'
+  | 'waterbody_validation' | 'drainage_validation' | 'farm_pond_validation' | 'infrastructure_validation';
 
 /** 1.2.3 — Indian meteorological seasons */
 export type Season = 'monsoon' | 'post_monsoon' | 'winter' | 'summer';
@@ -24,6 +25,18 @@ export interface LocationData {
   altitude?: number;
 }
 
+/** Schema for a property in a vector dataset layer */
+export interface VectorPropertySchema {
+  key: string;
+  label: string;
+  description?: string;
+  unit?: string;
+  type: 'string' | 'number' | 'boolean' | 'date';
+  display: boolean; // whether to show in the UI
+  importance?: 'high' | 'medium' | 'low';
+  format?: 'percentage' | 'area_ha' | 'area_km2' | 'count' | 'year' | 'text';
+}
+
 export interface DatasetLayer {
   id: string;
   title: string;
@@ -33,7 +46,7 @@ export interface DatasetLayer {
     path: string;
   };
   style?: {
-    kind: 'categorical' | 'choropleth' | 'point' | 'polygon' | 'image';
+    kind: 'categorical' | 'choropleth' | 'point' | 'polygon' | 'image' | 'line';
     field?: string;
     colors?: Record<string, string>;
     opacity?: number;
@@ -52,8 +65,16 @@ export interface DatasetLayer {
   maxZoom?: number;
   year?: number;
   description?: string;
-  category: 'lulc' | 'dynamicworld' | 'corestack' | 'forest' | 'boundary' | 'built' | 'treecover' | 'other';
+  category: 'lulc' | 'dynamicworld' | 'corestack' | 'forest' | 'boundary' | 'built' | 'treecover' | 'hydrology' | 'infrastructure' | 'other';
   enabled: boolean;
+  /** Schema describing what each property means — for meaningful display of vector features */
+  propertySchema?: VectorPropertySchema[];
+  /** Geometry types expected in this layer */
+  geometryTypes?: ('Point' | 'LineString' | 'Polygon' | 'MultiPoint' | 'MultiLineString' | 'MultiPolygon')[];
+  /** Whether this layer contains features that can be ground-truthed / validated */
+  validatable?: boolean;
+  /** Validation question prompt (e.g., "Is this drainage channel present on the ground?") */
+  validationPrompt?: string;
 }
 
 export interface DatasetManifest {
@@ -135,6 +156,9 @@ export interface Observation {
   speciesId?: string;             // link to species (for sightings)
   speciesData?: SpeciesSightingData;
 
+  /** Vector feature being validated (for vector ground-truthing) */
+  vectorFeatureContext?: VectorFeatureContext;
+
   // v2: sync state (replaces boolean `synced`)
   synced?: boolean;               // kept for backward compat with v1 data
   syncStatus?: SyncStatus;
@@ -165,6 +189,22 @@ export interface LocationSummaryData {
 }
 
 // ─── Phase 1 v2 Interfaces ────────────────────────────────────────
+
+/** Context about a vector feature being validated / ground-truthed */
+export interface VectorFeatureContext {
+  /** Layer ID the feature belongs to */
+  layerId: string;
+  /** Layer title for display */
+  layerTitle: string;
+  /** The feature's properties (key-value) */
+  featureProperties: Record<string, unknown>;
+  /** Geometry type of the feature */
+  geometryType: string;
+  /** Specific validation question for this feature type */
+  validationPrompt?: string;
+  /** Source of the vector data (e.g., 'CoreStack', 'DEM-derived', 'survey') */
+  dataSource?: string;
+}
 
 /** 1.2.5 — Detailed species sighting data embedded in an Observation */
 export interface SpeciesSightingData {

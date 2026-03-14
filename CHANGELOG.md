@@ -4,6 +4,62 @@ All notable changes to the Fields app are documented in this file.
 
 ---
 
+## [0.4.0] — 2025-06-07: Vector Data Inspection, GBIF & PBR Standards
+
+### Summary
+
+Implemented mentor feedback for the Monday demo: vector feature property inspection with schema-aware display, inline ground-truth validation for vector layers, GBIF species suggestions, PBR (People's Biodiversity Register) export format, and enhanced STAC metadata for vector validation context.
+
+### Vector Feature Inspector
+
+- **New component** `VectorFeatureInspector.tsx`: Click any vector feature on the map to see its properties displayed with schema-aware labels, units, and formatting.
+- Properties categorized into Primary / Secondary / Metadata tiers based on `propertySchema` importance.
+- Multi-feature tab navigation when multiple features overlap at a click point.
+- Inline validation buttons (Match / Mismatch / Unclear) that create georeferenced observations linked to the specific vector feature.
+- Auto-inferred validation prompts based on layer type (e.g., waterbody, drainage, farm pond, built-up).
+- New observation types: `waterbody_validation`, `drainage_validation`, `farm_pond_validation`, `infrastructure_validation`.
+
+### Property Schema System
+
+- Added `VectorPropertySchema` type: per-property metadata (label, description, unit, type, display priority, format).
+- Configured property schemas for all vector layers in `DatasetManager`:
+  - Western Ghats boundary (`REC_NUM`, `DATA_VALUE`)
+  - Dakshina Kannada boundary (with validation prompt)
+  - CoreStack Sindhudurg Kudal boundary (`gp_name`, `block_name`, `area`)
+  - CoreStack Sindhudurg Kudal LULC (12 properties with labels, units, and descriptions for all land-use categories)
+
+### GBIF Species Suggestions
+
+- **New service** `GBIFService.ts`: Queries the GBIF Occurrence API for species observed near the user's location.
+- Species autocomplete via GBIF Species Suggest API.
+- In-memory cache with 30-minute TTL to reduce API calls.
+- Integrated into `CaptureModal`: when recording a species sighting, nearby GBIF occurrences appear as tap-to-tag suggestions.
+
+### PBR Export (People's Biodiversity Register)
+
+- **New export method** `exportPBR()` in `AnnotationExporter`: generates a ZIP bundle aligned with NBA India PBR guidelines.
+- Includes Form II species checklist (JSON + CSV), GeoJSON of observation points, Traditional Ecological Knowledge section (consent-gated), and metadata.
+- Species checklist aggregates observations by species with vernacular names, habitats, and observation counts.
+
+### STAC Export Enhancement
+
+- STAC items now include `fields:vector_layer_id`, `fields:vector_layer_title`, `fields:vector_geometry_type`, `fields:vector_data_source`, `fields:vector_validation_prompt`, and `fields:vector_feature_properties` when the observation is a vector validation.
+- Model card tracks `vector_layers_validated` in the dataset section.
+
+### CaptureModal Updates
+
+- Expanded observation type picker from 5 → 9 types (added waterbody, drainage, farm pond, infrastructure validation).
+- GBIF species suggestions panel with loading state and online-only indicator.
+
+### Type System
+
+- Added `VectorPropertySchema`, `VectorFeatureContext` interfaces.
+- Enhanced `DatasetLayer` with `propertySchema`, `validatable`, `validationPrompt`, `geometryTypes` fields.
+- Extended `ObservationType` union with 4 new validation types.
+- Added `vectorFeatureContext` optional field to `Observation`.
+
+---
+
 ## [0.3.0] — 2026-03-04: Real Data Services & Offline Grid
 
 ### Summary

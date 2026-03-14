@@ -196,6 +196,15 @@ class AnnotationExporter {
           'fields:confidence': obs.confidence ?? null,
           'fields:season': obs.season ?? null,
           'fields:sync_status': obs.syncStatus ?? 'pending',
+          // Vector feature context (for ground-truthing vector datasets)
+          ...(obs.vectorFeatureContext ? {
+            'fields:vector_layer_id': obs.vectorFeatureContext.layerId,
+            'fields:vector_layer_title': obs.vectorFeatureContext.layerTitle,
+            'fields:vector_geometry_type': obs.vectorFeatureContext.geometryType,
+            'fields:vector_data_source': obs.vectorFeatureContext.dataSource ?? null,
+            'fields:vector_validation_prompt': obs.vectorFeatureContext.validationPrompt ?? null,
+            'fields:vector_feature_properties': obs.vectorFeatureContext.featureProperties,
+          } : {}),
         },
         links: [],
         assets: {} as Record<string, unknown>,
@@ -287,12 +296,17 @@ class AnnotationExporter {
     const typeCounts: Record<string, number> = {};
     const validationCounts: Record<string, number> = {};
     const sources = new Set<string>();
+    const vectorLayerCounts: Record<string, number> = {};
 
     for (const obs of observations) {
       const t = obs.observationType || 'general';
       typeCounts[t] = (typeCounts[t] || 0) + 1;
       validationCounts[obs.userValidation] = (validationCounts[obs.userValidation] || 0) + 1;
       obs.enrichmentSources?.forEach(s => sources.add(s));
+      if (obs.vectorFeatureContext) {
+        const vl = obs.vectorFeatureContext.layerTitle || obs.vectorFeatureContext.layerId;
+        vectorLayerCounts[vl] = (vectorLayerCounts[vl] || 0) + 1;
+      }
     }
 
     // Compute bounding box
@@ -321,6 +335,7 @@ class AnnotationExporter {
         } : null,
         observation_types: typeCounts,
         validation_distribution: validationCounts,
+        vector_layers_validated: Object.keys(vectorLayerCounts).length > 0 ? vectorLayerCounts : undefined,
       },
       provenance: {
         enrichment_sources: Array.from(sources),
@@ -348,6 +363,191 @@ class AnnotationExporter {
       includeCOCO: false,
       includeModelCard: false,
     });
+  }
+
+  // ─── PBR (People's Biodiversity Register) Format Export ──────────
+
+  /**
+   * Export species sighting observations in a format aligned with the
+   * People's Biodiversity Register (PBR) standard.
+   * 
+   * PBR structure (per NBA India guidelines):
+   * - Species checklist with vernacular names
+   * - Habitat & seasonal occurrence
+   * - Traditional knowledge (with consent flags)
+   * - GPS coordinates & administrative context
+   */
+  async exportPBR(): Promise<ExportResult> {
+    try {
+      const ready = await dbReady;
+      if (!ready) throw new Error('Database not available');
+
+      const observations = await db.observations
+        .where('observationType')
+        .equals('species_sighting')
+        .toArray();
+
+      if (observations.length === 0) {
+        return { success: true, recordCount: 0, error: 'No species sighting observations to export' };
+      }
+
+      const zip = new JSZip();
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+
+      // 1. Species Checklist (PBR Form II format)
+      const speciesChecklist = this.buildPBRChecklist(observations);
+      zip.file('pbr_species_checklist.json', JSON.stringify(speciesChecklist, null, 2));
+
+      // 2. CSV version for compatibility
+      const csv = this.buildPBRChecklistCSV(observations);
+      zip.file('pbr_species_checklist.csv', csv);
+
+      // 3. Observation details with GPS
+      const geojsonStr = await exportToGeoJSON(observations);
+      zip.file('pbr_observations.geojson', geojsonStr);
+
+      // 4. TEK (Traditional Ecological Knowledge) section — only if consent given
+      const tekObservations = observations.filter(o =>
+        o.speciesData?.isTEK && o.speciesData?.tekConsent === true
+      );
+      if (tekObservations.length > 0) {
+        const tekData = tekObservations.map(o => ({
+          species: o.speciesData?.speciesId,
+          vernacularName: o.speciesData?.vernacularName,
+          language: o.speciesData?.vernacularLanguage,
+          habitatType: o.speciesData?.habitatType,
+          location: { lat: o.location.lat, lon: o.location.lon },
+          region: o.context.region,
+          season: o.season,
+          recordedAt: o.timestamp,
+          consent: true,
+        }));
+        zip.file('pbr_traditional_knowledge.json', JSON.stringify({
+          disclaimer: 'This data contains Traditional Ecological Knowledge shared with explicit consent.',
+          license: 'CC-BY-NC-SA-4.0',
+          records: tekData,
+        }, null, 2));
+      }
+
+      // 5. Metadata
+      zip.file('pbr_metadata.json', JSON.stringify({
+        format: 'People\'s Biodiversity Register (PBR)',
+        standard: 'NBA India PBR Guidelines',
+        version: '1.0',
+        exportedAt: new Date().toISOString(),
+        region: 'Western Ghats',
+        totalSpecies: (speciesChecklist.species as unknown[]).length,
+        totalObservations: observations.length,
+        tekRecords: tekObservations.length,
+        dataQuality: {
+          withPhotos: observations.filter(o => o.image?.blobId).length,
+          withGPS: observations.filter(o => o.location.accuracy < 50).length,
+          highConfidence: observations.filter(o => (o.confidence || 0) >= 4).length,
+        },
+      }, null, 2));
+
+      const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE' });
+      const fileName = `fields_pbr_export_${timestamp}.zip`;
+
+      await logExport({
+        exportedAt: Date.now(),
+        recordCount: observations.length,
+        format: 'pbr_zip',
+        fileName,
+        sizeBytes: blob.size,
+        observationIds: observations.map(o => o.id),
+      });
+
+      return { success: true, blob, fileName, recordCount: observations.length, sizeBytes: blob.size };
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.error('[AnnotationExporter] PBR export failed:', msg);
+      return { success: false, recordCount: 0, error: msg };
+    }
+  }
+
+  /** Build PBR species checklist (Form II) */
+  private buildPBRChecklist(observations: Observation[]): Record<string, unknown> {
+    const speciesMap = new Map<string, {
+      scientificName: string;
+      vernacularNames: { name: string; language: string }[];
+      count: number;
+      habitats: Set<string>;
+      seasons: Set<string>;
+      lifeStages: Set<string>;
+      lastSeen: string;
+      isTEK: boolean;
+    }>();
+
+    for (const obs of observations) {
+      const speciesId = obs.speciesData?.speciesId || obs.speciesId || 'unknown';
+      const existing = speciesMap.get(speciesId);
+      if (existing) {
+        existing.count++;
+        if (obs.speciesData?.habitatType) existing.habitats.add(obs.speciesData.habitatType);
+        if (obs.season) existing.seasons.add(obs.season);
+        if (obs.speciesData?.lifeStage) existing.lifeStages.add(obs.speciesData.lifeStage);
+        if (obs.timestamp > existing.lastSeen) existing.lastSeen = obs.timestamp;
+        if (obs.speciesData?.vernacularName) {
+          const vn = { name: obs.speciesData.vernacularName, language: obs.speciesData.vernacularLanguage || 'unknown' };
+          if (!existing.vernacularNames.some(v => v.name === vn.name)) existing.vernacularNames.push(vn);
+        }
+        if (obs.speciesData?.isTEK) existing.isTEK = true;
+      } else {
+        speciesMap.set(speciesId, {
+          scientificName: speciesId,
+          vernacularNames: obs.speciesData?.vernacularName
+            ? [{ name: obs.speciesData.vernacularName, language: obs.speciesData.vernacularLanguage || 'unknown' }]
+            : [],
+          count: 1,
+          habitats: new Set(obs.speciesData?.habitatType ? [obs.speciesData.habitatType] : []),
+          seasons: new Set(obs.season ? [obs.season] : []),
+          lifeStages: new Set(obs.speciesData?.lifeStage ? [obs.speciesData.lifeStage] : []),
+          lastSeen: obs.timestamp,
+          isTEK: obs.speciesData?.isTEK || false,
+        });
+      }
+    }
+
+    return {
+      format: 'PBR Species Checklist (Form II)',
+      region: 'Western Ghats',
+      generatedAt: new Date().toISOString(),
+      species: Array.from(speciesMap.entries()).map(([id, s]) => ({
+        id,
+        scientificName: s.scientificName,
+        vernacularNames: s.vernacularNames,
+        observationCount: s.count,
+        habitats: Array.from(s.habitats),
+        seasonalPresence: Array.from(s.seasons),
+        lifeStagesObserved: Array.from(s.lifeStages),
+        lastObserved: s.lastSeen,
+        hasTraditionalKnowledge: s.isTEK,
+      })),
+    };
+  }
+
+  /** Build CSV version of the PBR checklist */
+  private buildPBRChecklistCSV(observations: Observation[]): string {
+    const header = 'Scientific Name,Vernacular Name,Language,Habitat,Season,Life Stage,Count,Confidence,Latitude,Longitude,Date,TEK Consent\n';
+    const rows = observations.map(o => {
+      const fields = [
+        o.speciesData?.speciesId || o.speciesId || '',
+        o.speciesData?.vernacularName || '',
+        o.speciesData?.vernacularLanguage || '',
+        o.speciesData?.habitatType || '',
+        o.season || '',
+        o.speciesData?.lifeStage || '',
+        String(o.speciesData?.count || 1),
+        String(o.confidence || ''),
+        String(o.location.lat),
+        String(o.location.lon),
+        o.timestamp,
+        o.speciesData?.tekConsent ? 'Yes' : 'No',
+      ];
+      return fields.map(f => `"${String(f).replace(/"/g, '""')}"`).join(',');
+    });
+    return header + rows.join('\n');
   }
 }
 

@@ -19,7 +19,13 @@ const DEFAULT_MANIFEST: DatasetManifest = {
       style: { kind: 'polygon', colors: { default: '#4a9eff33' } },
       query: { mode: 'feature_at_point', fields: ['REC_NUM', 'DATA_VALUE'] },
       category: 'boundary',
-      enabled: true
+      enabled: true,
+      geometryTypes: ['Polygon', 'MultiPolygon'],
+      validatable: false,
+      propertySchema: [
+        { key: 'REC_NUM', label: 'Record Number', type: 'string', display: true, importance: 'low' },
+        { key: 'DATA_VALUE', label: 'Region', type: 'string', display: true, importance: 'high' },
+      ],
     },
     // Dakshina Kannada Boundary
     {
@@ -30,7 +36,10 @@ const DEFAULT_MANIFEST: DatasetManifest = {
       style: { kind: 'polygon', colors: { default: '#ff9800aa' } },
       query: { mode: 'feature_at_point', fields: [] },
       category: 'boundary',
-      enabled: true
+      enabled: true,
+      geometryTypes: ['Polygon', 'MultiPolygon'],
+      validatable: true,
+      validationPrompt: 'Does this district boundary match the actual boundary on the ground?',
     },
     // LULC Composition Data
     {
@@ -140,7 +149,15 @@ const DEFAULT_MANIFEST: DatasetManifest = {
       style: { kind: 'polygon', colors: { default: '#00ff8844', outline: '#00cc66' } },
       query: { mode: 'feature_at_point', fields: ['gp_name', 'block_name', 'area'] },
       category: 'corestack',
-      enabled: true
+      enabled: true,
+      geometryTypes: ['Polygon', 'MultiPolygon'],
+      validatable: true,
+      validationPrompt: 'Does this administrative boundary match the ground reality?',
+      propertySchema: [
+        { key: 'gp_name', label: 'Gram Panchayat', type: 'string', display: true, importance: 'high' },
+        { key: 'block_name', label: 'Block Name', type: 'string', display: true, importance: 'high' },
+        { key: 'area', label: 'Area', type: 'number', display: true, importance: 'medium', format: 'area_ha', unit: 'ha' },
+      ],
     },
     // CoreStack LULC Vector Data for Sindhudurg-Kudal (ACTUAL POINT-SPECIFIC DATA)
     {
@@ -171,7 +188,24 @@ const DEFAULT_MANIFEST: DatasetManifest = {
         ] 
       },
       category: 'corestack',
-      enabled: true
+      enabled: true,
+      geometryTypes: ['Polygon', 'MultiPolygon'],
+      validatable: true,
+      validationPrompt: 'Does the reported land cover class match the ground reality at this location?',
+      propertySchema: [
+        { key: 'uid', label: 'Unique ID', type: 'string', display: true, importance: 'low' },
+        { key: 'area_in_ha', label: 'Area', type: 'number', display: true, importance: 'high', format: 'area_ha', unit: 'ha', description: 'Total area of this parcel in hectares' },
+        { key: 'tree_fores', label: 'Tree/Forest Cover', type: 'number', display: true, importance: 'high', format: 'percentage', description: 'Percentage of area under tree/forest cover' },
+        { key: 'shrub_scru', label: 'Shrub/Scrub', type: 'number', display: true, importance: 'high', format: 'percentage', description: 'Percentage of area under shrub/scrub vegetation' },
+        { key: 'barrenland', label: 'Barren Land', type: 'number', display: true, importance: 'medium', format: 'percentage', description: 'Percentage classified as barren land' },
+        { key: 'built-up_a', label: 'Built-up Area', type: 'number', display: true, importance: 'medium', format: 'percentage', description: 'Percentage of built-up (urban/rural) area' },
+        { key: 'doubly_cro', label: 'Double Cropped', type: 'number', display: true, importance: 'medium', format: 'percentage', description: 'Double-cropped agricultural area (Kharif + Rabi)' },
+        { key: 'single_kha', label: 'Single Crop (Kharif)', type: 'number', display: true, importance: 'medium', format: 'percentage', description: 'Single-cropped area (Kharif season only)' },
+        { key: 'triply_cro', label: 'Triple Cropped', type: 'number', display: true, importance: 'medium', format: 'percentage', description: 'Triple-cropped agricultural area' },
+        { key: 'k_water_ar', label: 'Kharif Water Area', type: 'number', display: true, importance: 'medium', format: 'area_ha', unit: 'ha', description: 'Area under water during Kharif season' },
+        { key: 'kr_water_a', label: 'Kharif-Rabi Water', type: 'number', display: true, importance: 'medium', format: 'area_ha', unit: 'ha', description: 'Area under water during Kharif and Rabi seasons' },
+        { key: 'krz_water_', label: 'Year-round Water', type: 'number', display: true, importance: 'high', format: 'area_ha', unit: 'ha', description: 'Perennial waterbody area (all 3 seasons)' },
+      ],
     },
     // District Urbanization
     {

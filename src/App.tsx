@@ -13,6 +13,7 @@ import SpeciesGuide from './components/SpeciesGuide';
 import SettingsPanel from './components/SettingsPanel';
 import CustomLayerImporter from './components/customlayers/CustomLayerImporter';
 import CustomLayerStyleEditor from './components/customlayers/CustomLayerStyleEditor';
+import VectorFeatureInspector, { VectorFeatureForInspection } from './components/VectorFeatureInspector';
 import { useNetworkStatus } from './hooks/useNetworkStatus';
 import { DatasetManager } from './services/DatasetManager';
 import { rasterLayerService } from './services/RasterLayerService';
@@ -20,7 +21,7 @@ import { tileLayerService } from './services/TileLayerService';
 import { GeoLocationService } from './services/GeoLocationService';
 import { syncEngine } from './services/SyncEngine';
 import { db, getCustomLayers, updateCustomLayer as dbUpdateCustomLayer, deleteCustomLayer as dbDeleteCustomLayer } from './db/database';
-import type { LocationData, Observation, DatasetLayer, DatasetValues, CustomLayer, CustomLayerStyle } from './types';
+import type { LocationData, Observation, DatasetLayer, DatasetValues, CustomLayer, CustomLayerStyle, VectorFeatureContext, ValidationStatus, ObservationType } from './types';
 import './styles/global.css';
 
 type TabType = 'map' | 'layers' | 'protocols' | 'log';
@@ -54,6 +55,7 @@ function App() {
   const [showLocationInfo, setShowLocationInfo] = useState(false);
   const [searchedLocation, setSearchedLocation] = useState<LocationData | null>(null);
   const [lastClickInfo, setLastClickInfo] = useState<MapClickInfo | null>(null);
+  const [vectorFeatures, setVectorFeatures] = useState<VectorFeatureForInspection[] | null>(null);
   
   // Location state
   const [currentLocation, setCurrentLocation] = useState<LocationData | null>(null);
@@ -241,13 +243,80 @@ function App() {
     const loc: LocationData = { lat, lon, accuracy: 0 };
     setSearchedLocation(loc);
     setLastClickInfo(info || null);
-    setShowLocationInfo(true);
-  }, []);
+
+    // Extract vector features for the inspector
+    const features = info?.features || [];
+    if (features.length > 0) {
+      const inspectionFeatures: VectorFeatureForInspection[] = features.map(f => {
+        const layerId = f.source === 'corestack' ? (f.coreStackLayerId || f.mapLayerId) : (f.datasetLayerId || f.mapLayerId);
+        const datasetLayer = layers.find(l => l.id === layerId);
+        const coreStackLayer = coreStackLayers.find(l => l.id === layerId);
+        const title = datasetLayer?.title || coreStackLayer?.name || layerId;
+        // Use geometry type hint from properties or default to 'Polygon'
+        const geomType = f.properties?.['_geometry_type'] as string || 'Polygon';
+        return {
+          layerId,
+          layerTitle: title,
+          source: f.source as 'corestack' | 'dataset',
+          geometryType: geomType,
+          properties: f.properties,
+          propertySchema: datasetLayer?.propertySchema,
+          validatable: datasetLayer?.validatable ?? true,
+          validationPrompt: datasetLayer?.validationPrompt,
+        };
+      });
+      setVectorFeatures(inspectionFeatures);
+    } else {
+      setVectorFeatures(null);
+      setShowLocationInfo(true);
+    }
+  }, [layers, coreStackLayers]);
 
   const handleGoToLocation = useCallback((lat: number, lon: number) => {
     mapRef.current?.flyTo([lon, lat], 15);
     setActiveTab('map');
   }, []);
+
+  // Handle vector feature validation from the inspector
+  const handleValidateVectorFeature = useCallback(async (
+    context: VectorFeatureContext,
+    validation: ValidationStatus,
+    observationType: ObservationType
+  ) => {
+    if (!searchedLocation) return;
+    const { v4: uuidv4 } = await import('uuid');
+    const { deriveSeason } = await import('./services/SeasonService');
+    const { getDeviceId, getUserName } = await import('./services/DeviceService');
+    const now = new Date().toISOString();
+    const deviceId = getDeviceId();
+    const userId = getUserName() || deviceId;
+
+    const observation: Observation = {
+      id: uuidv4(),
+      timestamp: now,
+      location: { lat: searchedLocation.lat, lon: searchedLocation.lon, accuracy: 0 },
+      context: { region: 'Western Ghats', areaMode: 'point' },
+      datasetValues: {},
+      userValidation: validation,
+      notes: `Vector validation: ${context.validationPrompt || 'Feature ground-truth'}`,
+      observationType,
+      vectorFeatureContext: context,
+      confidence: 3,
+      season: deriveSeason(now),
+      userId,
+      deviceId,
+      synced: false,
+      syncStatus: 'pending',
+    };
+
+    try {
+      await db.observations.add(observation);
+      setPendingSync(prev => prev + 1);
+      await syncEngine.enqueue(observation.id);
+    } catch (err) {
+      console.error('Failed to save vector validation:', err);
+    }
+  }, [searchedLocation]);
 
   // Basemap toggle
   const handleBasemapToggle = useCallback(() => {
@@ -488,6 +557,16 @@ function App() {
           layer={editingCustomLayer}
           onSave={handleCustomLayerStyleSave}
           onCancel={() => setEditingCustomLayer(null)}
+        />
+      )}
+
+      {/* Vector Feature Inspector — shows when clicking a vector feature on map */}
+      {vectorFeatures && vectorFeatures.length > 0 && searchedLocation && (
+        <VectorFeatureInspector
+          features={vectorFeatures}
+          location={{ lat: searchedLocation.lat, lon: searchedLocation.lon }}
+          onValidateFeature={handleValidateVectorFeature}
+          onClose={() => { setVectorFeatures(null); setShowLocationInfo(true); }}
         />
       )}
     </div>

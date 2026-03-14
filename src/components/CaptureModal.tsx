@@ -7,6 +7,7 @@ import { syncEngine } from '../services/SyncEngine';
 import { deriveSeason } from '../services/SeasonService';
 import { getDeviceId, getUserName } from '../services/DeviceService';
 import type { LocationData, Observation, ValidationStatus, DatasetValues, ImageData, ObservationType } from '../types';
+import { gbifService, GBIFSpeciesSuggestion } from '../services/GBIFService';
 
 interface CaptureModalProps {
   currentLocation: LocationData | null;
@@ -38,6 +39,8 @@ const CaptureModal: React.FC<CaptureModalProps> = ({
   const [confidence, setConfidence] = useState<number>(3);
   const [tagsInput, setTagsInput] = useState('');
   const [tags, setTags] = useState<string[]>([]);
+  const [gbifSuggestions, setGbifSuggestions] = useState<GBIFSpeciesSuggestion[]>([]);
+  const [loadingGbif, setLoadingGbif] = useState(false);
 
   // Get current location if not provided
   useEffect(() => {
@@ -75,6 +78,19 @@ const CaptureModal: React.FC<CaptureModalProps> = ({
         .catch(console.error);
     }
   }, [location, getDatasetValues]);
+
+  // Fetch GBIF species suggestions when species_sighting is selected and we have a location
+  useEffect(() => {
+    if (observationType !== 'species_sighting' || !location || !navigator.onLine) {
+      setGbifSuggestions([]);
+      return;
+    }
+    setLoadingGbif(true);
+    gbifService.getSuggestionsNearby({ lat: location.lat, lon: location.lon, radiusKm: 10, limit: 8 })
+      .then(setGbifSuggestions)
+      .catch(() => setGbifSuggestions([]))
+      .finally(() => setLoadingGbif(false));
+  }, [observationType, location]);
 
   // Handle image capture
   const handleCapture = useCallback(async () => {
@@ -344,7 +360,11 @@ const CaptureModal: React.FC<CaptureModalProps> = ({
               ['land_cover', '🌿 Land Cover'],
               ['species_sighting', '🦎 Species'],
               ['water_body', '💧 Water Body'],
+              ['waterbody_validation', '🏞️ Waterbody Check'],
+              ['drainage_validation', '🌊 Drainage Check'],
+              ['farm_pond_validation', '🪷 Farm Pond Check'],
               ['restoration_site', '🌱 Restoration'],
+              ['infrastructure_validation', '🏗️ Infrastructure'],
               ['general', '📋 General'],
             ] as const).map(([val, label]) => (
               <button
@@ -365,6 +385,46 @@ const CaptureModal: React.FC<CaptureModalProps> = ({
             ))}
           </div>
         </div>
+
+        {/* GBIF Species Suggestions (when species_sighting selected and online) */}
+        {observationType === 'species_sighting' && (gbifSuggestions.length > 0 || loadingGbif) && (
+          <div style={{ marginBottom: '16px' }}>
+            <div className="dataset-values-title">
+              🌿 Species reported nearby (GBIF)
+            </div>
+            {loadingGbif ? (
+              <div style={{ color: 'var(--text-muted)', fontSize: '12px', padding: '8px' }}>
+                Loading GBIF suggestions...
+              </div>
+            ) : (
+              <div style={{
+                display: 'flex', flexDirection: 'column', gap: '4px',
+                maxHeight: '140px', overflowY: 'auto',
+                background: 'var(--bg-tertiary)', borderRadius: '8px', padding: '6px',
+              }}>
+                {gbifSuggestions.map((s, i) => (
+                  <div key={i} onClick={() => {
+                    setTags(prev => prev.includes(s.scientificName) ? prev : [...prev, s.scientificName]);
+                  }} style={{
+                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                    padding: '6px 8px', borderRadius: '6px', cursor: 'pointer',
+                    background: tags.includes(s.scientificName) ? 'var(--accent)' : 'transparent',
+                    color: tags.includes(s.scientificName) ? 'white' : 'var(--text-primary)',
+                    fontSize: '12px',
+                  }}>
+                    <span style={{ fontStyle: 'italic' }}>{s.scientificName}</span>
+                    <span style={{ fontSize: '10px', opacity: 0.7 }}>
+                      {s.occurrenceCount} obs{s.iucnStatus ? ` · ${s.iucnStatus}` : ''}
+                    </span>
+                  </div>
+                ))}
+                <div style={{ fontSize: '10px', color: 'var(--text-muted)', textAlign: 'center', padding: '4px' }}>
+                  Tap to tag · Data from GBIF.org
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Confidence Slider (Task 1.7.2) */}
         <div style={{ marginBottom: '16px' }}>

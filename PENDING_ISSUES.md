@@ -1,52 +1,82 @@
 # Pending issues — first public release (DW + IndiaSAT validator)
 
-Open follow-ups that genuinely require user input or out-of-band work.
-Items previously listed and now resolved in code (placeholder data
-removal, MapView decoupling, `gh` auth setup, in-app smoke test) have
-been dropped from this list.
+This list tracks follow-ups that still require user input or out-of-band
+work. Items previously listed and now resolved in code (legacy strip-
+down, in-app smoke test, etc.) have been dropped. The most recent agent
+pass shipped defensive normalisation, an env-override pathway for
+IndiaSAT band naming, and an offline tile packing script. The hard
+blocker on full GEE introspection (see #1) is the IndiaSAT folder
+sharing.
 
 ---
 
-## 1. Confirm IndiaSAT band naming on real GEE assets
-**Labels:** `bug-risk`, `gee`, `indiasat`, `priority:p1`
-`server/dynamicworld-proxy.mjs` currently uses a heuristic to pick the
-label / confidence bands inside each yearly IndiaSAT asset
-(`/label|class|predict|lulc/i` and `/conf|prob/i`). Until we have one
-successful round-trip with real GEE credentials, we don't know:
+## 1. IndiaSAT GEE asset is not shared with this account
+**Labels:** `access`, `gee`, `indiasat`, `priority:p1`
+`projects/ee-indiasat/assets/LULC_CombinedOutputs_WithConfidence` (and
+every yearly path candidate underneath it) returns
+`does not exist or doesn't allow this operation` for our authenticated
+GEE project `ee-tkkrfirst`. Earth Engine itself authenticates correctly —
+the public Dynamic World asset reads fine — so this is a sharing
+permission, not an auth bug.
 
-- The actual asset path pattern under
-  `projects/ee-indiasat/assets/LULC_CombinedOutputs_WithConfidence/`
-  (we try `${year}`, `LULC_${year}`, `lulc_${year}`, `India_${year}`,
-  `${year}_LULC`, then `ee.data.listAssets` fallback).
-- The actual band names.
-- Whether the asset is `Image` or `ImageCollection` (handler supports both).
+**What we shipped instead:**
 
-**Action:** run the proxy with GEE credentials against any one year, log
-`bandNames`, and replace the heuristic with explicit names. See
-`pickIndiaSATBands` in `server/dynamicworld-proxy.mjs`.
+- `server/dynamicworld-proxy.mjs` now supports operator overrides via
+  env vars so the path can be pinned without code changes once access is
+  granted:
+  - `INDIASAT_ASSET_TEMPLATE` — e.g.
+    `projects/ee-indiasat/assets/LULC_CombinedOutputs_WithConfidence/LULC_${year}`
+  - `INDIASAT_LABEL_BAND` — e.g. `predicted_label`
+  - `INDIASAT_CONF_BAND` — e.g. `confidence`
+- `pickIndiaSATBands` was rewritten with a ranked list of regex patterns
+  (LULC > classification > label/class > category), an explicit
+  two-band fallback (other band = confidence), and a one-time
+  `[IndiaSAT] bandNames=… → label="…" conf="…"` diagnostic log so the
+  first successful round-trip captures the real names without code
+  changes.
+- `resolveIndiaSATAsset` now emits a richer error that distinguishes
+  "no access" from "no asset" and tells the operator which env var to
+  set.
 
-## 2. IndiaSAT confidence band semantics (0–1 vs 0–100)
-**Labels:** `data`, `indiasat`, `priority:p1`
-`IndiaSATService.fetchPointData` returns `confidence` as a raw number.
-`PredictionCard` renders it via `Math.round(confidence * 100)`. If the
-provider serves 0–100 (e.g. `confidence_percent`), the bar will saturate
-at 100 % and lose precision. Normalize defensively once we see real
-values (`c > 1 ? c : c * 100`).
+**Action (out-of-band):** ask the IndiaSAT / CoRE Stack team
+(core-stack.org / ICTD-IITD) to share read access on
+`projects/ee-indiasat/assets/LULC_CombinedOutputs_WithConfidence/` with
+the GEE project `ee-tkkrfirst` (or whichever project you put in
+`GEE_PROJECT`). Once granted, no code changes are needed — restart the
+proxy and the diagnostic log will surface the real band names.
 
-## 3. Offline IndiaSAT tile pack for AOI mode
-**Labels:** `offline`, `indiasat`, `priority:p2`
-Dynamic World already has the `dynamicworld://live` + offline grid
-pattern (`public/data/dynamicworld/grid-*.json`). IndiaSAT is currently
-**online-only** (live XYZ via GEE proxy). Need a `scripts/` job that:
-- Prepares per-year, per-AOI raster tiles
-  (`public/tiles/indiasat/${year}/${z}/${x}/${y}.png`).
-- Generates a manifest analogous to the DW one.
-- Wires `IndiaSATService.getLiveTileUrlTemplate` to prefer cached tiles
-  when offline.
+## 2. ~~IndiaSAT confidence band semantics (0–1 vs 0–100)~~ — DONE
+`IndiaSATService.fetchPointData` now normalises the upstream confidence
+defensively: values ≤ 1 are treated as a 0–1 fraction, ≤ 100 as a
+percent, ≤ 255 as 8-bit scaled, anything else clamped. Downstream
+consumers (PredictionCard, agreement scoring, exports) see a single
+canonical 0–1 number. PredictionCard's display formatter still tolerates
+either scale defensively. Resolved in this pass.
+
+## 3. ~~Offline IndiaSAT tile pack for AOI mode~~ — script ready, gated on #1
+`scripts/pack-indiasat-tiles.mjs` is the new tile-packing job. Given a
+year + bbox + zoom range it auths via the same GEE refresh-token flow
+as the proxy, resolves the asset (honours `INDIASAT_ASSET_TEMPLATE`),
+asks EE for an XYZ urlFormat via `getMap`, walks the tile grid, and
+writes `public/tiles/indiasat/<year>/<z>/<x>/<y>.png` plus a
+`manifest.json`.
+
+`IndiaSATService.getLiveTileUrlTemplate` already prefers
+`/tiles/indiasat/<year>/manifest.json` when one is present, so the
+client switches to cached tiles automatically. The script can be run
+end-to-end as soon as the access blocker in #1 clears.
+
+Example:
+
+```
+node scripts/pack-indiasat-tiles.mjs --year 2022 \
+  --bbox 75.0,12.5,76.0,13.5 --minZoom 8 --maxZoom 12
+```
 
 ## 4. Android APK rebuild + Capacitor sync after refactor
 **Labels:** `android`, `release`, `priority:p1`
-Bottom nav, App shell, services, and types all changed. Re-run:
+Bottom nav, App shell, services, and types all changed in the
+strip-down + IndiaSAT integration. Re-run:
 
 ```
 npm run build

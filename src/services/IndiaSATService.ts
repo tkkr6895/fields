@@ -95,13 +95,26 @@ class IndiaSATService {
       const data = await r.json();
       const classId = typeof data.classId === 'number' ? data.classId : Number(data.classId);
       const klass = INDIASAT_CLASSES[classId];
+      // Normalize confidence to 0–1. The upstream IndiaSAT confidence band
+      // could be 0–1 (fraction), 0–100 (percent), or 0–255 (8-bit scaled).
+      // Pick the scale defensively from the raw value so downstream
+      // consumers (PredictionCard, exports, agreement scoring) all see a
+      // single canonical fraction in [0, 1]. See issue #15.
+      const rawConf = data.confidence == null ? null : Number(data.confidence);
+      let confidence: number | null = null;
+      if (rawConf != null && Number.isFinite(rawConf)) {
+        if (rawConf <= 1) confidence = rawConf;
+        else if (rawConf <= 100) confidence = rawConf / 100;
+        else if (rawConf <= 255) confidence = rawConf / 255;
+        else confidence = Math.max(0, Math.min(1, rawConf));
+      }
       return {
         lat: data.lat,
         lon: data.lon,
         year: data.year,
         classId,
         landCoverClass: klass?.name ?? data.landCoverClass ?? `Class ${classId}`,
-        confidence: data.confidence == null ? null : Number(data.confidence),
+        confidence,
         assetId: data.assetId,
         band: data.band,
         source: 'live',
@@ -116,6 +129,13 @@ class IndiaSATService {
 
   /** Get an XYZ tile URL template for IndiaSAT LULC for a given year. */
   async getLiveTileUrlTemplate(year: IndiaSATYear = LATEST_INDIASAT_YEAR): Promise<string | null> {
+    // 1. Prefer a packed offline tileset if one exists (see
+    //    scripts/pack-indiasat-tiles.mjs). The manifest is generated next to
+    //    the tiles and lists the public URL template that the dev server +
+    //    Capacitor APK can both serve from the bundled `public/` folder.
+    const offline = await this.getOfflineTileUrlTemplate(year);
+    if (offline) return offline;
+
     const cached = this.mapIdCache.get(year);
     if (cached?.urlFormat) return cached.urlFormat;
     const base = this.absBase();
@@ -131,6 +151,29 @@ class IndiaSATService {
       return data.urlFormat;
     } catch (err) {
       console.warn('[IndiaSAT] mapid error:', err);
+      return null;
+    }
+  }
+
+  private offlineManifestCache = new Map<number, string | null>();
+
+  /** Look for a packed tile manifest at `/tiles/indiasat/<year>/manifest.json`. */
+  private async getOfflineTileUrlTemplate(year: IndiaSATYear): Promise<string | null> {
+    if (this.offlineManifestCache.has(year)) return this.offlineManifestCache.get(year) ?? null;
+    try {
+      const manifestUrl = `${window.location.origin}/tiles/indiasat/${year}/manifest.json`;
+      const r = await fetch(manifestUrl, { signal: AbortSignal.timeout(2000) });
+      if (!r.ok) {
+        this.offlineManifestCache.set(year, null);
+        return null;
+      }
+      const m = await r.json();
+      const tpl = typeof m?.urlTemplate === 'string' ? m.urlTemplate : null;
+      this.offlineManifestCache.set(year, tpl);
+      if (tpl) console.info(`[IndiaSAT] using offline tile pack for ${year}:`, tpl);
+      return tpl;
+    } catch {
+      this.offlineManifestCache.set(year, null);
       return null;
     }
   }

@@ -83,30 +83,51 @@ const INDIASAT_PALETTE = [
 const INDIASAT_ASSET_FOLDER = 'projects/ee-indiasat/assets/LULC_CombinedOutputs_WithConfidence';
 const INDIASAT_YEARS = [2017, 2018, 2019, 2020, 2021, 2022];
 
+// Optional operator overrides — if the IndiaSAT folder is granted to your
+// project later (or if you have your own mirror), you can pin the exact path
+// + band names without changing code. See PENDING_ISSUES.md issue #14.
+//   INDIASAT_ASSET_TEMPLATE  e.g. "projects/ee-indiasat/assets/LULC_CombinedOutputs_WithConfidence/LULC_${year}"
+//   INDIASAT_LABEL_BAND      e.g. "predicted_label"
+//   INDIASAT_CONF_BAND       e.g. "confidence"
+const INDIASAT_ASSET_TEMPLATE = (process.env.INDIASAT_ASSET_TEMPLATE || '').trim();
+const INDIASAT_LABEL_BAND_OVERRIDE = (process.env.INDIASAT_LABEL_BAND || '').trim();
+const INDIASAT_CONF_BAND_OVERRIDE = (process.env.INDIASAT_CONF_BAND || '').trim();
+
 // Resolved per-year image IDs cached after first successful asset listing.
 const indiasatYearAssetCache = new Map();
+// Resolved (labelBand, confBand) cached after first successful introspection.
+const indiasatBandCache = new Map();
 
 async function resolveIndiaSATAsset(year) {
   if (indiasatYearAssetCache.has(year)) return indiasatYearAssetCache.get(year);
-  // Try common naming conventions before falling back to listAssets.
-  const candidates = [
+  // If operator pinned a template, honour it first.
+  const candidates = [];
+  if (INDIASAT_ASSET_TEMPLATE) {
+    candidates.push(INDIASAT_ASSET_TEMPLATE.replace(/\$\{year\}/g, String(year)));
+  }
+  // Common naming conventions seen in CoRE Stack docs + IndiaSAT scripts.
+  candidates.push(
     `${INDIASAT_ASSET_FOLDER}/${year}`,
     `${INDIASAT_ASSET_FOLDER}/LULC_${year}`,
     `${INDIASAT_ASSET_FOLDER}/lulc_${year}`,
     `${INDIASAT_ASSET_FOLDER}/India_${year}`,
     `${INDIASAT_ASSET_FOLDER}/${year}_LULC`,
-  ];
+    `${INDIASAT_ASSET_FOLDER}/LULC_${year}_${(year + 1) % 100}`,  // e.g. LULC_2022_23
+    `${INDIASAT_ASSET_FOLDER}/${year}_${(year + 1) % 100}`,        // e.g. 2022_23
+  );
+  let lastErr = null;
   for (const id of candidates) {
     try {
       const info = await new Promise((res, rej) =>
         ee.data.getAsset(id, (a, e) => (e ? rej(e) : res(a)))
       );
       if (info) {
+        console.log(`[IndiaSAT] resolved year ${year} → ${id} (type=${info.type})`);
         indiasatYearAssetCache.set(year, id);
         return id;
       }
-    } catch {
-      /* try next */
+    } catch (e) {
+      lastErr = e;
     }
   }
   // Fallback: list children of folder and look for a match containing the year.
@@ -118,13 +139,21 @@ async function resolveIndiaSATAsset(year) {
     const match = assets.find(a => String(a.id || a.name || '').includes(String(year)));
     if (match) {
       const id = match.id || match.name;
+      console.log(`[IndiaSAT] resolved year ${year} via listAssets → ${id}`);
       indiasatYearAssetCache.set(year, id);
       return id;
     }
   } catch (err) {
+    lastErr = err;
     console.warn('[IndiaSAT] listAssets failed:', err.message);
   }
-  throw new Error(`IndiaSAT asset for year ${year} not found in ${INDIASAT_ASSET_FOLDER}`);
+  // Build a richer error that distinguishes "no access" from "no asset".
+  const errMsg = String(lastErr?.message || lastErr || '');
+  const isPermission = /does not exist or (?:doesn|caller does not have access)/i.test(errMsg);
+  const hint = isPermission
+    ? `The IndiaSAT asset folder is not readable by this GEE project. Ask the IndiaSAT team to share read access with your service account / project, or set INDIASAT_ASSET_TEMPLATE to your own mirror.`
+    : `Set INDIASAT_ASSET_TEMPLATE to the exact yearly asset path, e.g. INDIASAT_ASSET_TEMPLATE="${INDIASAT_ASSET_FOLDER}/LULC_\${year}".`;
+  throw new Error(`IndiaSAT asset for year ${year} not resolvable. ${hint} (last error: ${errMsg || 'none'})`);
 }
 
 /** Build an EE image for a given year, detecting label + confidence bands. */
@@ -141,10 +170,49 @@ async function indiasatImageForYear(year) {
 }
 
 function pickIndiaSATBands(bandNames) {
-  // Heuristic: first band ≈ label; band containing "conf" ≈ confidence.
-  const labelBand = bandNames.find(b => /label|class|predict|lulc/i.test(b)) || bandNames[0];
-  const confBand = bandNames.find(b => /conf|prob/i.test(b));
-  return { labelBand, confBand };
+  const cacheKey = bandNames.join('|');
+  if (indiasatBandCache.has(cacheKey)) return indiasatBandCache.get(cacheKey);
+  // 1. Honour explicit operator overrides.
+  let labelBand = INDIASAT_LABEL_BAND_OVERRIDE && bandNames.includes(INDIASAT_LABEL_BAND_OVERRIDE)
+    ? INDIASAT_LABEL_BAND_OVERRIDE
+    : null;
+  let confBand = INDIASAT_CONF_BAND_OVERRIDE && bandNames.includes(INDIASAT_CONF_BAND_OVERRIDE)
+    ? INDIASAT_CONF_BAND_OVERRIDE
+    : null;
+  // 2. Score candidates by pattern strength (most-specific first).
+  const labelPatterns = [
+    /^(?:predicted_)?lulc$/i,
+    /predicted[_\s-]?(?:label|class|lulc)/i,
+    /classification|classified/i,
+    /label|class(?!\b)/i,
+    /lulc|landcover|landuse|category|cluster/i,
+  ];
+  const confPatterns = [
+    /^confidence$/i,
+    /confidence|probab|prob_score/i,
+    /score|prob/i,
+  ];
+  if (!labelBand) {
+    for (const re of labelPatterns) {
+      const hit = bandNames.find(b => re.test(b));
+      if (hit) { labelBand = hit; break; }
+    }
+    if (!labelBand) labelBand = bandNames[0];
+  }
+  if (!confBand) {
+    for (const re of confPatterns) {
+      const hit = bandNames.find(b => b !== labelBand && re.test(b));
+      if (hit) { confBand = hit; break; }
+    }
+    // Fall back: if there's exactly two bands and we picked the label, the other is likely confidence.
+    if (!confBand && bandNames.length === 2) {
+      confBand = bandNames.find(b => b !== labelBand) || null;
+    }
+  }
+  const out = { labelBand, confBand };
+  indiasatBandCache.set(cacheKey, out);
+  console.log(`[IndiaSAT] bandNames=${JSON.stringify(bandNames)} → label="${labelBand}" conf="${confBand || '(none)'}"`);
+  return out;
 }
 
 function parseServiceAccountJson() {

@@ -32,28 +32,18 @@ const BottomNav: React.FC<BottomNavProps> = ({
         <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor">
           <path d="M11.99 18.54l-7.37-5.73L3 14.07l9 7 9-7-1.63-1.27-7.38 5.74zM12 16l7.36-5.73L21 9l-9-7-9 7 1.63 1.27L12 16z"/>
         </svg>
-        <span>Layers</span>
+        <span>Overlays</span>
       </button>
 
       {/* Central Capture Button */}
       <button 
         className="nav-capture-btn"
         onClick={onCaptureClick}
-        title="Add Field Observation"
+        title="Validate this spot"
       >
         <svg viewBox="0 0 24 24" width="28" height="28" fill="currentColor">
           <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm5 11h-4v4h-2v-4H7v-2h4V7h2v4h4v2z"/>
         </svg>
-      </button>
-
-      <button 
-        className={`nav-item ${activeTab === 'protocols' ? 'active' : ''}`}
-        onClick={() => onTabChange('protocols')}
-      >
-        <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor">
-          <path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/>
-        </svg>
-        <span>Guide</span>
       </button>
 
       <button 

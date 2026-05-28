@@ -1,576 +1,392 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
-import MapView, { MapViewRef, CoreStackLayer, MapClickInfo } from './components/MapView';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import MapView, { MapViewRef } from './components/MapView';
 import Header from './components/Header';
 import BottomNav from './components/BottomNav';
 import MapControls from './components/MapControls';
-import SearchBar from './components/SearchBar';
-import LayerPanelPro from './components/LayerPanelPro';
-import LocationInfoPanel from './components/LocationInfoPanel';
-import CaptureModal from './components/CaptureModal';
 import FieldLog from './components/FieldLog';
-import FieldProtocols from './components/FieldProtocols';
-import SpeciesGuide from './components/SpeciesGuide';
 import SettingsPanel from './components/SettingsPanel';
-import CustomLayerImporter from './components/customlayers/CustomLayerImporter';
-import CustomLayerStyleEditor from './components/customlayers/CustomLayerStyleEditor';
-import VectorFeatureInspector, { VectorFeatureForInspection } from './components/VectorFeatureInspector';
+import PredictionCard from './components/PredictionCard';
+import ValidationCapture from './components/ValidationCapture';
 import { useNetworkStatus } from './hooks/useNetworkStatus';
-import { DatasetManager } from './services/DatasetManager';
-import { rasterLayerService } from './services/RasterLayerService';
-import { tileLayerService } from './services/TileLayerService';
 import { GeoLocationService } from './services/GeoLocationService';
 import { syncEngine } from './services/SyncEngine';
-import { db, getCustomLayers, updateCustomLayer as dbUpdateCustomLayer, deleteCustomLayer as dbDeleteCustomLayer } from './db/database';
-import type { LocationData, Observation, DatasetLayer, DatasetValues, CustomLayer, CustomLayerStyle, VectorFeatureContext, ValidationStatus, ObservationType } from './types';
+import { db } from './db/database';
+import { dynamicWorldService, DW_CLASSES } from './services/DynamicWorldService';
+import { indiaSatService, INDIASAT_CLASSES, INDIASAT_YEARS, type IndiaSATYear, LATEST_INDIASAT_YEAR } from './services/IndiaSATService';
+import {
+  fetchPredictionSnapshot,
+  PREDICTION_SOURCES,
+  type PredictionSnapshot,
+} from './services/PredictionService';
+import type { LocationData, Observation, DatasetLayer } from './types';
 import './styles/global.css';
+import './styles/fields-app.css';
 
-type TabType = 'map' | 'layers' | 'protocols' | 'log';
+type TabType = 'map' | 'layers' | 'log';
+type OverlayId = 'dynamicworld' | 'indiasat';
 
-// Create singleton instance
-const datasetManager = new DatasetManager();
+const WG_DEFAULT_CENTER: [number, number] = [75.5, 13.0];
 
 function App() {
   // Map state
-  const [center, setCenter] = useState<[number, number]>([75.5, 13.0]);
+  const [center, setCenter] = useState<[number, number]>(WG_DEFAULT_CENTER);
   const [zoom, setZoom] = useState(8);
-  const [basemap, setBasemap] = useState<'dark' | 'satellite'>('dark');
-  const [layers, setLayers] = useState<DatasetLayer[]>([]);
-  const [activeLayers, setActiveLayers] = useState<Set<string>>(() => {
-    const initial = new Set<string>(['western_ghats_boundary']);
-    if ((import.meta.env.VITE_DW_GEE_PROXY_URL || '').trim().length > 0) {
-      initial.add('dynamicworld_live');
-    }
-    return initial;
-  });
-  const [coreStackLayers, setCoreStackLayers] = useState<CoreStackLayer[]>([]);
-  const [customLayers, setCustomLayers] = useState<CustomLayer[]>([]);
-  const [showLayerImporter, setShowLayerImporter] = useState(false);
-  const [editingCustomLayer, setEditingCustomLayer] = useState<CustomLayer | null>(null);
-  
-  // Navigation state
+  const [basemap, setBasemap] = useState<'dark' | 'satellite'>('satellite');
+  const [activeOverlays, setActiveOverlays] = useState<Set<OverlayId>>(new Set());
+  const [indiasatYear, setIndiasatYear] = useState<IndiaSATYear>(LATEST_INDIASAT_YEAR);
+  const [indiasatTileUrl, setIndiasatTileUrl] = useState<string | null>(null);
+  const [indiasatTileError, setIndiasatTileError] = useState<string | null>(null);
+
+  // Navigation
   const [activeTab, setActiveTab] = useState<TabType>('map');
-  const [showCapture, setShowCapture] = useState(false);
-  const [showProtocols, setShowProtocols] = useState(false);
-  const [showSpecies, setShowSpecies] = useState(false);
-  const [showLocationInfo, setShowLocationInfo] = useState(false);
-  const [searchedLocation, setSearchedLocation] = useState<LocationData | null>(null);
-  const [lastClickInfo, setLastClickInfo] = useState<MapClickInfo | null>(null);
-  const [vectorFeatures, setVectorFeatures] = useState<VectorFeatureForInspection[] | null>(null);
-  
-  // Location state
-  const [currentLocation, setCurrentLocation] = useState<LocationData | null>(null);
-  
-  // Data state
-  const [pendingSync, setPendingSync] = useState(0);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  
-  // Map reference for controls
-  const mapRef = useRef<MapViewRef>(null);
-  
-  // Location service
-  const geoService = useRef(new GeoLocationService());
-  
-  // Network status
+  const [captureOpen, setCaptureOpen] = useState(false);
+  const [captureSnapshot, setCaptureSnapshot] = useState<PredictionSnapshot | null>(null);
+
+  // Location: GPS vs pinned (tapped on map)
+  const [currentLocation, setCurrentLocation] = useState<LocationData | null>(null);
+  const [pinnedLocation, setPinnedLocation] = useState<LocationData | null>(null);
+  const focusLocation = pinnedLocation ?? currentLocation;
+
+  // Counts
+  const [pendingSync, setPendingSync] = useState(0);
+  const [totalObs, setTotalObs] = useState(0);
+
+  // Network
   const { isOnline } = useNetworkStatus();
-  
-  // Initialize app
+
+  // Refs
+  const mapRef = useRef<MapViewRef>(null);
+  const geoService = useRef(new GeoLocationService());
+
+  // Init
   useEffect(() => {
-    // Load layers from dataset manager and raster service
-    const loadLayers = async () => {
-      try {
-        // Load vector/CSV layers
-        await datasetManager.initialize();
-        const csvLayers = datasetManager.getLayers();
-        
-        // Load raster image overlay layers
-        const rasterLayers = await rasterLayerService.getRasterLayers();
-
-        // Load raster XYZ tile layers (more reliable for large rasters)
-        const tileLayers = await tileLayerService.getTileLayers();
-        
-        // Combine all layers
-        const dynamicWorldLiveLayer: DatasetLayer = {
-          id: 'dynamicworld_live',
-          title: 'Dynamic World (Live GEE)',
-          type: 'raster',
-          source: { format: 'xyz', path: 'dynamicworld://live' },
-          style: { kind: 'image', opacity: 0.75 },
-          minZoom: 0,
-          maxZoom: 19,
-          description: 'Live Dynamic World LULC from Google Earth Engine (requires configured proxy)',
-          category: 'dynamicworld',
-          enabled: true
-        };
-
-        const allLayers = [...csvLayers, ...rasterLayers, ...tileLayers, dynamicWorldLiveLayer];
-        setLayers(allLayers);
-        
-        console.log(`Loaded ${csvLayers.length} dataset layers, ${rasterLayers.length} image overlays, ${tileLayers.length} tile layers`);
-      } catch (err) {
-        console.error('Failed to load layers:', err);
-      }
-    };
-    loadLayers();
-    
-    // Count pending observations (v2 uses syncStatus field)
-    const countPending = async () => {
-      try {
-        const pending = await db.observations
-          .where('syncStatus')
-          .anyOf(['pending', 'queued', 'failed'])
-          .count();
-        setPendingSync(pending);
-      } catch {
-        // Fallback: count all observations (no index available)
-        const total = await db.observations.count();
-        setPendingSync(total);
-      }
-    };
-    countPending();
-
-    // Load custom layers from IndexedDB
-    const loadCustomLayers = async () => {
-      try {
-        const cls = await getCustomLayers();
-        setCustomLayers(cls);
-      } catch (err) {
-        console.error('Failed to load custom layers:', err);
-      }
-    };
-    loadCustomLayers();
-
-    // Start SyncEngine auto-sync (Task 1.4.6)
     syncEngine.startAutoSync();
-    
-    // Start location watch
-    geoService.current.watchPosition((loc) => {
-      setCurrentLocation(loc);
-    });
-    
+    geoService.current.watchPosition((loc) => setCurrentLocation(loc));
+
+    const refreshCounts = async () => {
+      try {
+        const pending = await db.observations.where('syncStatus').anyOf(['pending', 'queued', 'failed']).count();
+        const total = await db.observations.count();
+        setPendingSync(pending);
+        setTotalObs(total);
+      } catch {
+        // ignore
+      }
+    };
+    refreshCounts();
+    const t = setInterval(refreshCounts, 5000);
+
     return () => {
       geoService.current.stopWatching();
+      clearInterval(t);
     };
   }, []);
 
-  // Map handlers
-  const handleMapMove = useCallback((newCenter: [number, number], newZoom: number) => {
-    setCenter(newCenter);
-    setZoom(newZoom);
-  }, []);
-
-  const handleCoreStackLayersLoaded = useCallback((layers: CoreStackLayer[]) => {
-    setCoreStackLayers(layers);
-  }, []);
-
-  const handleLoadCoreStackAtPoint = useCallback(async (lat: number, lon: number) => {
-    if (!mapRef.current) return;
-    await mapRef.current.loadCoreStackAtPoint(lat, lon);
-  }, []);
-
-  const handleLoadCoreStackByAdmin = useCallback(async (state: string, district: string, tehsil: string) => {
-    if (!mapRef.current) return;
-    await mapRef.current.loadCoreStackForAdmin(state, district, tehsil);
-  }, []);
-
-  const handleLayerToggle = useCallback((layerId: string) => {
-    setActiveLayers(prev => {
-      const next = new Set(prev);
-      if (next.has(layerId)) {
-        next.delete(layerId);
-      } else {
-        next.add(layerId);
-      }
-      return next;
+  // Resolve IndiaSAT tile URL when year or overlay changes
+  useEffect(() => {
+    if (!activeOverlays.has('indiasat')) return;
+    let cancelled = false;
+    setIndiasatTileUrl(null);
+    setIndiasatTileError(null);
+    indiaSatService.getLiveTileUrlTemplate(indiasatYear).then(url => {
+      if (cancelled) return;
+      if (!url) setIndiasatTileError('IndiaSAT tiles unavailable — check the GEE proxy.');
+      else setIndiasatTileUrl(url);
     });
+    return () => { cancelled = true; };
+  }, [indiasatYear, activeOverlays]);
+
+  // Layer list MapView consumes
+  const layers = useMemo<DatasetLayer[]>(() => {
+    const out: DatasetLayer[] = [];
+    out.push({
+      id: 'dynamicworld_live',
+      title: 'Dynamic World (live)',
+      type: 'raster',
+      source: { format: 'xyz', path: 'dynamicworld://live' },
+      style: { kind: 'image', opacity: 0.7 },
+      minZoom: 0, maxZoom: 19,
+      category: 'dynamicworld',
+      enabled: activeOverlays.has('dynamicworld'),
+    });
+    if (indiasatTileUrl && activeOverlays.has('indiasat')) {
+      out.push({
+        id: `indiasat_${indiasatYear}`,
+        title: `IndiaSAT LULC ${indiasatYear}`,
+        type: 'raster',
+        source: { format: 'xyz', path: indiasatTileUrl },
+        style: { kind: 'image', opacity: 0.7 },
+        minZoom: 0, maxZoom: 19,
+        category: 'lulc',
+        year: indiasatYear,
+        enabled: true,
+      });
+    }
+    return out;
+  }, [activeOverlays, indiasatTileUrl, indiasatYear]);
+
+  const activeLayerIds = useMemo(() => {
+    const s = new Set<string>();
+    if (activeOverlays.has('dynamicworld')) s.add('dynamicworld_live');
+    if (activeOverlays.has('indiasat')) s.add(`indiasat_${indiasatYear}`);
+    return s;
+  }, [activeOverlays, indiasatYear]);
+
+  // Map interactions
+  const handleMapMove = useCallback((newCenter: [number, number], newZoom: number) => {
+    setCenter(newCenter); setZoom(newZoom);
   }, []);
 
-  // Get dataset values at location
-  const getDatasetValues = useCallback(async (lat: number, lon: number): Promise<DatasetValues> => {
-    try {
-      const activeLayerIds = Array.from(activeLayers);
-      const values = await datasetManager.getValuesAtPoint(lat, lon, activeLayerIds);
-      return values || {};
-    } catch (err) {
-      console.error('Failed to query point:', err);
-      return {};
-    }
-  }, [activeLayers]);
-
-  // Handle new observation
-  const handleCapture = useCallback(async (observation: Observation) => {
-    try {
-      await db.observations.add(observation);
-      setPendingSync(prev => prev + 1);
-      setShowCapture(false);
-    } catch (err) {
-      console.error('Failed to save observation:', err);
-    }
+  const handleMapClick = useCallback((lat: number, lon: number) => {
+    setPinnedLocation({ lat, lon, accuracy: 0 });
   }, []);
 
-  // Control handlers
-  const handleZoomIn = useCallback(() => mapRef.current?.zoomIn(), []);
-  const handleZoomOut = useCallback(() => mapRef.current?.zoomOut(), []);
-  
   const handleLocateMe = useCallback(async () => {
-    if (currentLocation) {
-      mapRef.current?.flyTo([currentLocation.lon, currentLocation.lat], 15);
-      return true;
-    }
     try {
       const loc = await geoService.current.getCurrentPosition();
       setCurrentLocation(loc);
-      mapRef.current?.flyTo([loc.lon, loc.lat], 15);
+      setPinnedLocation(null);
+      mapRef.current?.flyTo([loc.lon, loc.lat], 16);
       return true;
     } catch {
       return false;
     }
-  }, [currentLocation]);
+  }, []);
 
   const handleResetView = useCallback(() => mapRef.current?.resetView(), []);
+  const handleBasemapToggle = useCallback(() => setBasemap(p => p === 'dark' ? 'satellite' : 'dark'), []);
 
-  // Handle search result selection
-  const handleSearch = useCallback((lat: number, lon: number, placeName?: string) => {
-    console.log('Search:', lat, lon, placeName);
-    mapRef.current?.flyTo([lon, lat], 14);
-    const loc: LocationData = { lat, lon, accuracy: 0 };
-    setSearchedLocation(loc);
-    // Automatically show location info after search
-    setTimeout(() => setShowLocationInfo(true), 500);
+  const handleOverlayToggle = useCallback((id: OverlayId) => {
+    setActiveOverlays(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
   }, []);
 
-  // Handle map click to get info for that location
-  const handleMapClick = useCallback((lat: number, lon: number, info?: MapClickInfo) => {
-    const loc: LocationData = { lat, lon, accuracy: 0 };
-    setSearchedLocation(loc);
-    setLastClickInfo(info || null);
+  // Validate from PredictionCard
+  const handleLaunchValidate = useCallback((snapshot: PredictionSnapshot) => {
+    setCaptureSnapshot(snapshot);
+    setCaptureOpen(true);
+  }, []);
 
-    // Extract vector features for the inspector
-    const features = info?.features || [];
-    if (features.length > 0) {
-      const inspectionFeatures: VectorFeatureForInspection[] = features.map(f => {
-        const layerId = f.source === 'corestack' ? (f.coreStackLayerId || f.mapLayerId) : (f.datasetLayerId || f.mapLayerId);
-        const datasetLayer = layers.find(l => l.id === layerId);
-        const coreStackLayer = coreStackLayers.find(l => l.id === layerId);
-        const title = datasetLayer?.title || coreStackLayer?.name || layerId;
-        // Use geometry type hint from properties or default to 'Polygon'
-        const geomType = f.properties?.['_geometry_type'] as string || 'Polygon';
-        return {
-          layerId,
-          layerTitle: title,
-          source: f.source as 'corestack' | 'dataset',
-          geometryType: geomType,
-          properties: f.properties,
-          propertySchema: datasetLayer?.propertySchema,
-          validatable: datasetLayer?.validatable ?? true,
-          validationPrompt: datasetLayer?.validationPrompt,
-        };
-      });
-      setVectorFeatures(inspectionFeatures);
-    } else {
-      setVectorFeatures(null);
-      setShowLocationInfo(true);
+  const handleCaptureButton = useCallback(async () => {
+    let loc = focusLocation;
+    if (!loc) {
+      const ok = await handleLocateMe();
+      if (!ok) {
+        alert('Locate yourself first — we need GPS to anchor the validation.');
+        return;
+      }
+      loc = currentLocation;
+      if (!loc) return;
     }
-  }, [layers, coreStackLayers]);
+    const snap = isOnline
+      ? await fetchPredictionSnapshot(loc.lat, loc.lon, { indiasatYear })
+      : null;
+    setCaptureSnapshot(snap);
+    setCaptureOpen(true);
+  }, [focusLocation, currentLocation, isOnline, indiasatYear, handleLocateMe]);
+
+  const handleObservationSubmit = useCallback(async (obs: Observation) => {
+    await db.observations.add(obs);
+    setPendingSync(p => p + 1);
+    setTotalObs(p => p + 1);
+    setCaptureOpen(false);
+    setCaptureSnapshot(null);
+  }, []);
 
   const handleGoToLocation = useCallback((lat: number, lon: number) => {
-    mapRef.current?.flyTo([lon, lat], 15);
+    mapRef.current?.flyTo([lon, lat], 16);
+    setPinnedLocation({ lat, lon, accuracy: 0 });
     setActiveTab('map');
   }, []);
-
-  // Handle vector feature validation from the inspector
-  const handleValidateVectorFeature = useCallback(async (
-    context: VectorFeatureContext,
-    validation: ValidationStatus,
-    observationType: ObservationType
-  ) => {
-    if (!searchedLocation) return;
-    const { v4: uuidv4 } = await import('uuid');
-    const { deriveSeason } = await import('./services/SeasonService');
-    const { getDeviceId, getUserName } = await import('./services/DeviceService');
-    const now = new Date().toISOString();
-    const deviceId = getDeviceId();
-    const userId = getUserName() || deviceId;
-
-    const observation: Observation = {
-      id: uuidv4(),
-      timestamp: now,
-      location: { lat: searchedLocation.lat, lon: searchedLocation.lon, accuracy: 0 },
-      context: { region: 'Western Ghats', areaMode: 'point' },
-      datasetValues: {},
-      userValidation: validation,
-      notes: `Vector validation: ${context.validationPrompt || 'Feature ground-truth'}`,
-      observationType,
-      vectorFeatureContext: context,
-      confidence: 3,
-      season: deriveSeason(now),
-      userId,
-      deviceId,
-      synced: false,
-      syncStatus: 'pending',
-    };
-
-    try {
-      await db.observations.add(observation);
-      setPendingSync(prev => prev + 1);
-      await syncEngine.enqueue(observation.id);
-    } catch (err) {
-      console.error('Failed to save vector validation:', err);
-    }
-  }, [searchedLocation]);
-
-  // Basemap toggle
-  const handleBasemapToggle = useCallback(() => {
-    setBasemap(prev => prev === 'dark' ? 'satellite' : 'dark');
-  }, []);
-
-  // Tab handlers
-  const handleTabChange = useCallback((tab: string) => {
-    const typedTab = tab as TabType;
-    if (typedTab === activeTab && typedTab !== 'map') {
-      setActiveTab('map');
-    } else {
-      setActiveTab(typedTab);
-    }
-  }, [activeTab]);
-
-  // Fetch and show location info panel
-  const handleShowLocationInfo = useCallback(() => {
-    if (currentLocation) {
-      setSearchedLocation(currentLocation);
-      setShowLocationInfo(true);
-    }
-  }, [currentLocation]);
-
-  // ─── Custom Layer Handlers (Task 1.8.13) ───────────────────
-  const handleToggleCustomLayer = useCallback((layerId: string) => {
-    setCustomLayers(prev =>
-      prev.map(cl =>
-        cl.id === layerId ? { ...cl, enabled: !(cl.enabled ?? true) } : cl
-      )
-    );
-    // Persist toggle
-    const layer = customLayers.find(l => l.id === layerId);
-    if (layer) {
-      dbUpdateCustomLayer(layerId, { enabled: !(layer.enabled ?? true) }).catch(console.error);
-    }
-  }, [customLayers]);
-
-  const handleDeleteCustomLayer = useCallback(async (layerId: string) => {
-    if (!confirm('Delete this custom layer?')) return;
-    await dbDeleteCustomLayer(layerId);
-    setCustomLayers(prev => prev.filter(l => l.id !== layerId));
-  }, []);
-
-  const handleCustomLayerStyleSave = useCallback(async (style: CustomLayerStyle) => {
-    if (!editingCustomLayer) return;
-    await dbUpdateCustomLayer(editingCustomLayer.id, { style });
-    setCustomLayers(prev =>
-      prev.map(cl => cl.id === editingCustomLayer.id ? { ...cl, style } : cl)
-    );
-    setEditingCustomLayer(null);
-  }, [editingCustomLayer]);
-
-  const handleLayerImported = useCallback((layer: CustomLayer) => {
-    setCustomLayers(prev => [layer, ...prev]);
-    setShowLayerImporter(false);
-  }, []);
-
-  // Render panel content
-  const renderPanel = () => {
-    switch (activeTab) {
-      case 'layers':
-        return (
-          <LayerPanelPro
-            layers={layers}
-            activeLayers={activeLayers}
-            onToggle={handleLayerToggle}
-            onClose={() => setActiveTab('map')}
-            coreStackLayers={coreStackLayers}
-            mapCenter={{ lat: center[1], lon: center[0] }}
-            selectedLocation={searchedLocation ? { lat: searchedLocation.lat, lon: searchedLocation.lon } : undefined}
-            onLoadCoreStackAtPoint={handleLoadCoreStackAtPoint}
-            onLoadCoreStackByAdmin={handleLoadCoreStackByAdmin}
-            customLayers={customLayers}
-            onToggleCustomLayer={handleToggleCustomLayer}
-            onEditCustomLayerStyle={(layer) => setEditingCustomLayer(layer)}
-            onDeleteCustomLayer={handleDeleteCustomLayer}
-            onImportLayer={() => setShowLayerImporter(true)}
-          />
-        );
-      case 'protocols':
-        return (
-          <div className="panel-overlay">
-            <div className="panel-header">
-              <h2>Field Resources</h2>
-              <button className="panel-close" onClick={() => setActiveTab('map')}>✕</button>
-            </div>
-            <div className="guide-content">
-              <button className="guide-btn" onClick={() => setShowProtocols(true)}>
-                <span className="guide-icon">📋</span>
-                <span>Field Protocols</span>
-              </button>
-              <button className="guide-btn" onClick={() => setShowSpecies(true)}>
-                <span className="guide-icon">🌿</span>
-                <span>Species Guide</span>
-              </button>
-              <button className="guide-btn" onClick={handleShowLocationInfo} disabled={!currentLocation}>
-                <span className="guide-icon">📍</span>
-                <span>Location Summary</span>
-              </button>
-            </div>
-          </div>
-        );
-      case 'log':
-        return (
-          <div className="panel-overlay">
-            <div className="panel-header">
-              <h2>Field Log</h2>
-              <button className="panel-close" onClick={() => setActiveTab('map')}>✕</button>
-            </div>
-            <FieldLog onGoToLocation={handleGoToLocation} />
-          </div>
-        );
-      default:
-        return null;
-    }
-  };
 
   return (
     <div className="app">
       <Header
         isOnline={isOnline}
         syncStatus={{ pending: pendingSync }}
-        onSettingsClick={() => setSettingsOpen(!settingsOpen)}
+        onSettingsClick={() => setSettingsOpen(s => !s)}
       />
-      
-      {/* Search Bar - Always visible on map */}
-      <div className="search-container">
-        <SearchBar onSearch={handleSearch} isOnline={isOnline} />
-      </div>
-      
+
       <main className="main-content">
-        {/* Map always visible */}
         <MapView
           ref={mapRef}
           center={center}
           zoom={zoom}
           basemap={basemap}
           layers={layers}
-          activeLayers={activeLayers}
+          activeLayers={activeLayerIds}
           currentLocation={currentLocation}
           onMapMove={handleMapMove}
           onMapClick={handleMapClick}
-          onCoreStackLayersLoaded={handleCoreStackLayersLoaded}
         />
-        
-        {/* Map Controls */}
+
         <MapControls
-          onZoomIn={handleZoomIn}
-          onZoomOut={handleZoomOut}
+          onZoomIn={() => mapRef.current?.zoomIn()}
+          onZoomOut={() => mapRef.current?.zoomOut()}
           onLocateMe={handleLocateMe}
           onResetView={handleResetView}
         />
-        
-        {/* Basemap Toggle */}
-        <button 
-          className="basemap-toggle"
-          onClick={handleBasemapToggle}
-          title={`Switch to ${basemap === 'dark' ? 'satellite' : 'dark'} view`}
-        >
+
+        <button className="basemap-toggle" onClick={handleBasemapToggle} title={`Switch to ${basemap === 'dark' ? 'satellite' : 'dark'}`}>
           {basemap === 'dark' ? '🛰️' : '🌙'}
         </button>
-        
-        {/* Active Layers Indicator */}
-        {activeLayers.size > 0 && activeTab === 'map' && (
-          <div className="active-layers-indicator" onClick={() => setActiveTab('layers')}>
-            {activeLayers.size} layer{activeLayers.size !== 1 ? 's' : ''} active
+
+        {activeTab === 'map' && (
+          <div className="fields-prediction-anchor">
+            <PredictionCard
+              focusLocation={focusLocation}
+              isOnline={isOnline}
+              onValidate={handleLaunchValidate}
+              onYearChange={(y) => setIndiasatYear(y)}
+            />
           </div>
         )}
-        
-        {/* Overlay Panels */}
-        {renderPanel()}
+
+        {pinnedLocation && activeTab === 'map' && (
+          <button className="fields-pin-indicator" onClick={() => setPinnedLocation(null)}>
+            📌 Pinned · tap to follow GPS
+          </button>
+        )}
+
+        {activeTab === 'layers' && (
+          <OverlayPanel
+            activeOverlays={activeOverlays}
+            indiasatYear={indiasatYear}
+            indiasatTileError={indiasatTileError}
+            isOnline={isOnline}
+            onToggle={handleOverlayToggle}
+            onYearChange={setIndiasatYear}
+            onClose={() => setActiveTab('map')}
+          />
+        )}
+
+        {activeTab === 'log' && (
+          <div className="panel-overlay">
+            <div className="panel-header">
+              <h2>Field log · {totalObs} observation{totalObs === 1 ? '' : 's'}</h2>
+              <button className="panel-close" onClick={() => setActiveTab('map')}>✕</button>
+            </div>
+            <FieldLog onGoToLocation={handleGoToLocation} />
+          </div>
+        )}
       </main>
-      
-      {/* Bottom Navigation */}
+
       <BottomNav
         activeTab={activeTab}
-        onTabChange={handleTabChange}
-        onCaptureClick={() => setShowCapture(true)}
+        onTabChange={(t) => {
+          const tt = t as TabType;
+          if (tt === activeTab && tt !== 'map') setActiveTab('map');
+          else setActiveTab(tt);
+        }}
+        onCaptureClick={handleCaptureButton}
         pendingSync={pendingSync}
       />
-      
-      {/* Modals */}
-      {showCapture && (
-        <CaptureModal
-          currentLocation={currentLocation}
-          getDatasetValues={getDatasetValues}
-          onCapture={handleCapture}
-          onClose={() => setShowCapture(false)}
-        />
-      )}
-      
-      {showProtocols && (
-        <FieldProtocols 
-          onClose={() => setShowProtocols(false)} 
-          onStartProtocol={(id) => {
-            console.log('Starting protocol:', id);
-            setShowProtocols(false);
-          }}
-        />
-      )}
-      
-      {showSpecies && (
-        <SpeciesGuide 
-          onClose={() => setShowSpecies(false)} 
-          onRecordSpecies={(id) => {
-            console.log('Recording species:', id);
-            setShowSpecies(false);
-          }}
-        />
-      )}
-      
-      {showLocationInfo && searchedLocation && (
-        <LocationInfoPanel
-          key={`${searchedLocation.lat}-${searchedLocation.lon}`}
-          location={searchedLocation}
-          isOnline={isOnline}
-          activeLayerIds={[...activeLayers]}
-          mapClickInfo={lastClickInfo}
-          onClose={() => setShowLocationInfo(false)}
+
+      {captureOpen && (
+        <ValidationCapture
+          focusLocation={focusLocation}
+          snapshot={captureSnapshot}
+          onSubmit={handleObservationSubmit}
+          onClose={() => { setCaptureOpen(false); setCaptureSnapshot(null); }}
         />
       )}
 
-      {settingsOpen && (
-        <SettingsPanel onClose={() => setSettingsOpen(false)} />
-      )}
-
-      {/* Custom Layer Modals (Task 1.8) */}
-      {showLayerImporter && (
-        <CustomLayerImporter
-          onImported={handleLayerImported}
-          onCancel={() => setShowLayerImporter(false)}
-        />
-      )}
-
-      {editingCustomLayer && (
-        <CustomLayerStyleEditor
-          layer={editingCustomLayer}
-          onSave={handleCustomLayerStyleSave}
-          onCancel={() => setEditingCustomLayer(null)}
-        />
-      )}
-
-      {/* Vector Feature Inspector — shows when clicking a vector feature on map */}
-      {vectorFeatures && vectorFeatures.length > 0 && searchedLocation && (
-        <VectorFeatureInspector
-          features={vectorFeatures}
-          location={{ lat: searchedLocation.lat, lon: searchedLocation.lon }}
-          onValidateFeature={handleValidateVectorFeature}
-          onClose={() => { setVectorFeatures(null); setShowLocationInfo(true); }}
-        />
-      )}
+      {settingsOpen && <SettingsPanel onClose={() => setSettingsOpen(false)} />}
     </div>
   );
 }
+
+// Hint compiler to keep DynamicWorldService side imports tree-shake friendly
+void dynamicWorldService;
+
+/** Overlay control surface — toggles each model raster + legend. */
+const OverlayPanel: React.FC<{
+  activeOverlays: Set<OverlayId>;
+  indiasatYear: IndiaSATYear;
+  indiasatTileError: string | null;
+  isOnline: boolean;
+  onToggle: (id: OverlayId) => void;
+  onYearChange: (y: IndiaSATYear) => void;
+  onClose: () => void;
+}> = ({ activeOverlays, indiasatYear, indiasatTileError, isOnline, onToggle, onYearChange, onClose }) => {
+  return (
+    <div className="panel-overlay">
+      <div className="panel-header">
+        <h2>LULC overlays</h2>
+        <button className="panel-close" onClick={onClose}>✕</button>
+      </div>
+      <div className="overlay-content">
+        <section className="overlay-card">
+          <header>
+            <div>
+              <strong>{PREDICTION_SOURCES.dynamicworld.title}</strong>
+              <small>{PREDICTION_SOURCES.dynamicworld.description}</small>
+              <small>{PREDICTION_SOURCES.dynamicworld.resolution} · {PREDICTION_SOURCES.dynamicworld.temporal}</small>
+            </div>
+            <label className="switch">
+              <input type="checkbox" checked={activeOverlays.has('dynamicworld')} onChange={() => onToggle('dynamicworld')} disabled={!isOnline} />
+              <span />
+            </label>
+          </header>
+          {!isOnline && <p className="overlay-warn">Offline — live tiles unavailable.</p>}
+          {activeOverlays.has('dynamicworld') && (
+            <ul className="legend">
+              {Object.entries(DW_CLASSES).map(([id, info]) => (
+                <li key={id}>
+                  <span className="legend-swatch" style={{ background: info.color }} />
+                  <span>{info.name}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+
+        <section className="overlay-card">
+          <header>
+            <div>
+              <strong>{PREDICTION_SOURCES.indiasat.title}</strong>
+              <small>{PREDICTION_SOURCES.indiasat.description}</small>
+              <small>{PREDICTION_SOURCES.indiasat.resolution} · {PREDICTION_SOURCES.indiasat.temporal}</small>
+            </div>
+            <label className="switch">
+              <input type="checkbox" checked={activeOverlays.has('indiasat')} onChange={() => onToggle('indiasat')} disabled={!isOnline} />
+              <span />
+            </label>
+          </header>
+          <div className="overlay-controls">
+            <label>Year
+              <select value={indiasatYear} onChange={(e) => onYearChange(Number(e.target.value) as IndiaSATYear)}>
+                {INDIASAT_YEARS.map(y => <option key={y} value={y}>{y}</option>)}
+              </select>
+            </label>
+          </div>
+          {indiasatTileError && <p className="overlay-warn">{indiasatTileError}</p>}
+          {activeOverlays.has('indiasat') && (
+            <ul className="legend">
+              {Object.entries(INDIASAT_CLASSES).map(([id, info]) => (
+                <li key={id}>
+                  <span className="legend-swatch" style={{ background: info.color }} />
+                  <span>{info.name}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+
+        <section className="overlay-attribution">
+          <small>
+            Sources: <a href={PREDICTION_SOURCES.dynamicworld.providerUrl} target="_blank" rel="noreferrer">Dynamic World</a>{' · '}
+            <a href={PREDICTION_SOURCES.indiasat.providerUrl} target="_blank" rel="noreferrer">IndiaSAT LULC (CoRE Stack)</a>.
+            All live predictions are served via Google Earth Engine through the configured proxy.
+          </small>
+        </section>
+      </div>
+    </div>
+  );
+};
 
 export default App;

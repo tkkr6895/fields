@@ -46,6 +46,107 @@ const DW_PALETTE = [
   '#B39FE1'  // Snow
 ];
 
+// IndiaSAT LULC classes (core-stack.org IndiaSAT pipeline)
+// Asset: projects/ee-indiasat/assets/LULC_CombinedOutputs_WithConfidence/
+// Hydrological years 2017-2022, 30m resolution, annual.
+const INDIASAT_CLASS_NAMES = {
+  0: 'Background',
+  1: 'Built up',
+  2: 'Kharif water',
+  3: 'Kharif + Rabi water',
+  4: 'Kharif + Rabi + Zaid water',
+  5: 'Crops',
+  6: 'Trees / Forest',
+  7: 'Barren land',
+  8: 'Single Kharif cropping',
+  9: 'Single Non-Kharif cropping',
+  10: 'Double cropping',
+  11: 'Triple / Perennial cropping',
+  12: 'Shrubs / Scrubs'
+};
+// Palette inspired by IndiaSAT visualisation conventions (built-red, water-blues, vegetation-greens, crop-ambers).
+const INDIASAT_PALETTE = [
+  '#000000', // 0  Background (transparent in viz)
+  '#C4281B', // 1  Built up
+  '#5DADE2', // 2  Kharif water
+  '#2E86C1', // 3  Kharif + Rabi water
+  '#1B4F72', // 4  Perennial water
+  '#E49635', // 5  Crops (generic)
+  '#1E6E2E', // 6  Trees / Forest
+  '#A59B8F', // 7  Barren land
+  '#F4D03F', // 8  Single Kharif
+  '#F1C40F', // 9  Single Non-Kharif
+  '#D68910', // 10 Double cropping
+  '#7E5109', // 11 Triple / Perennial cropping
+  '#DFC35A'  // 12 Shrubs / Scrubs
+];
+const INDIASAT_ASSET_FOLDER = 'projects/ee-indiasat/assets/LULC_CombinedOutputs_WithConfidence';
+const INDIASAT_YEARS = [2017, 2018, 2019, 2020, 2021, 2022];
+
+// Resolved per-year image IDs cached after first successful asset listing.
+const indiasatYearAssetCache = new Map();
+
+async function resolveIndiaSATAsset(year) {
+  if (indiasatYearAssetCache.has(year)) return indiasatYearAssetCache.get(year);
+  // Try common naming conventions before falling back to listAssets.
+  const candidates = [
+    `${INDIASAT_ASSET_FOLDER}/${year}`,
+    `${INDIASAT_ASSET_FOLDER}/LULC_${year}`,
+    `${INDIASAT_ASSET_FOLDER}/lulc_${year}`,
+    `${INDIASAT_ASSET_FOLDER}/India_${year}`,
+    `${INDIASAT_ASSET_FOLDER}/${year}_LULC`,
+  ];
+  for (const id of candidates) {
+    try {
+      const info = await new Promise((res, rej) =>
+        ee.data.getAsset(id, (a, e) => (e ? rej(e) : res(a)))
+      );
+      if (info) {
+        indiasatYearAssetCache.set(year, id);
+        return id;
+      }
+    } catch {
+      /* try next */
+    }
+  }
+  // Fallback: list children of folder and look for a match containing the year.
+  try {
+    const listing = await new Promise((res, rej) =>
+      ee.data.listAssets({ parent: INDIASAT_ASSET_FOLDER }, {}, (a, e) => (e ? rej(e) : res(a)))
+    );
+    const assets = listing?.assets || [];
+    const match = assets.find(a => String(a.id || a.name || '').includes(String(year)));
+    if (match) {
+      const id = match.id || match.name;
+      indiasatYearAssetCache.set(year, id);
+      return id;
+    }
+  } catch (err) {
+    console.warn('[IndiaSAT] listAssets failed:', err.message);
+  }
+  throw new Error(`IndiaSAT asset for year ${year} not found in ${INDIASAT_ASSET_FOLDER}`);
+}
+
+/** Build an EE image for a given year, detecting label + confidence bands. */
+async function indiasatImageForYear(year) {
+  const assetId = await resolveIndiaSATAsset(year);
+  // Asset may be Image or ImageCollection — handle both.
+  let img;
+  try {
+    img = ee.Image(assetId);
+  } catch {
+    img = ee.ImageCollection(assetId).mosaic();
+  }
+  return { image: img, assetId };
+}
+
+function pickIndiaSATBands(bandNames) {
+  // Heuristic: first band ≈ label; band containing "conf" ≈ confidence.
+  const labelBand = bandNames.find(b => /label|class|predict|lulc/i.test(b)) || bandNames[0];
+  const confBand = bandNames.find(b => /conf|prob/i.test(b));
+  return { labelBand, confBand };
+}
+
 function parseServiceAccountJson() {
   const raw = process.env.GEE_SERVICE_ACCOUNT_JSON;
   if (!raw) return null;
@@ -375,4 +476,111 @@ app.get('/dynamicworld/mapid', async (req, res) => {
 app.listen(PORT, () => {
   console.log(`[dynamicworld-proxy] listening on http://localhost:${PORT}`);
   console.log('[dynamicworld-proxy] set GEE_SERVICE_ACCOUNT_JSON to enable Earth Engine');
+});
+
+// ─── IndiaSAT LULC endpoints ────────────────────────────────────────────────
+
+// List available IndiaSAT years and class metadata
+app.get('/indiasat/meta', (_req, res) => {
+  res.json({
+    asset: INDIASAT_ASSET_FOLDER,
+    years: INDIASAT_YEARS,
+    classes: INDIASAT_CLASS_NAMES,
+    palette: INDIASAT_PALETTE,
+    resolution_m: 30,
+    temporal: 'annual (hydrological year)',
+    citation: 'Sahasranaman et al. (2024). IndiaSAT LULC, projects/ee-indiasat. https://core-stack.org/lulc/'
+  });
+});
+
+// Point query: returns class label + confidence (if available)
+app.get('/indiasat/point', async (req, res) => {
+  try {
+    await ensureEarthEngine();
+    const lat = Number(req.query.lat);
+    const lon = Number(req.query.lon);
+    const year = req.query.year ? Number(req.query.year) : INDIASAT_YEARS[INDIASAT_YEARS.length - 1];
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+      res.status(400).json({ error: 'lat/lon required' });
+      return;
+    }
+    if (!INDIASAT_YEARS.includes(year)) {
+      res.status(400).json({ error: `Unsupported year ${year}. Available: ${INDIASAT_YEARS.join(',')}` });
+      return;
+    }
+
+    const { image, assetId } = await indiasatImageForYear(year);
+    const bandNames = await new Promise((resolve, reject) =>
+      image.bandNames().getInfo((n, e) => (e ? reject(e) : resolve(n)))
+    );
+    const { labelBand, confBand } = pickIndiaSATBands(bandNames);
+
+    const point = ee.Geometry.Point([lon, lat]);
+    const selected = confBand ? image.select([labelBand, confBand]) : image.select([labelBand]);
+    const sampled = await new Promise((resolve, reject) => {
+      selected.reduceRegion({
+        reducer: ee.Reducer.first(),
+        geometry: point,
+        scale: 30,
+        bestEffort: true,
+      }).getInfo((info, err) => (err ? reject(err) : resolve(info)));
+    });
+
+    const rawLabel = sampled?.[labelBand];
+    if (rawLabel === null || rawLabel === undefined) {
+      res.status(404).json({ error: 'No IndiaSAT data at this location for year', year, assetId });
+      return;
+    }
+    const labelInt = Math.round(Number(rawLabel));
+    const className = INDIASAT_CLASS_NAMES[labelInt] ?? `Class ${labelInt}`;
+    const confidence = confBand && sampled?.[confBand] != null ? Number(sampled[confBand]) : null;
+
+    res.json({
+      lat,
+      lon,
+      year,
+      assetId,
+      band: labelBand,
+      confidenceBand: confBand || null,
+      classId: labelInt,
+      landCoverClass: className,
+      confidence,
+      timestamp: new Date().toISOString()
+    });
+  } catch (e) {
+    res.status(500).json({ error: String(e?.message || e) });
+  }
+});
+
+// Map tiles for a given year
+app.get('/indiasat/mapid', async (req, res) => {
+  try {
+    await ensureEarthEngine();
+    const year = req.query.year ? Number(req.query.year) : INDIASAT_YEARS[INDIASAT_YEARS.length - 1];
+    if (!INDIASAT_YEARS.includes(year)) {
+      res.status(400).json({ error: `Unsupported year ${year}` });
+      return;
+    }
+    const { image, assetId } = await indiasatImageForYear(year);
+    const bandNames = await new Promise((resolve, reject) =>
+      image.bandNames().getInfo((n, e) => (e ? reject(e) : resolve(n)))
+    );
+    const { labelBand } = pickIndiaSATBands(bandNames);
+    const vis = image.select(labelBand).visualize({ min: 0, max: 12, palette: INDIASAT_PALETTE });
+    vis.getMap({}, (map, err) => {
+      if (err) return res.status(500).json({ error: String(err) });
+      res.json({
+        mapid: map.mapid,
+        token: map.token,
+        urlFormat: map.urlFormat,
+        palette: INDIASAT_PALETTE,
+        classes: INDIASAT_CLASS_NAMES,
+        year,
+        assetId,
+        band: labelBand
+      });
+    });
+  } catch (e) {
+    res.status(500).json({ error: String(e?.message || e) });
+  }
 });

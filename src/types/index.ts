@@ -164,6 +164,90 @@ export interface Observation {
   syncStatus?: SyncStatus;
   syncedAt?: number;
   enrichmentSources?: string[];   // e.g. ['weather', 'dynamicworld', 'corestack']
+
+  // v3 — LULC prediction validation core (see PredictionValidationRecord below)
+  predictionValidation?: PredictionValidationRecord;
+  fieldData?: LulcFieldData;
+  weather?: WeatherSnapshot;
+}
+
+/**
+ * v3 — Snapshot of every model prediction at the observation time, together
+ * with the observer's agreement and (when in disagreement) the class they
+ * believe is actually correct. This is the primary unit of validation.
+ */
+export interface PredictionValidationRecord {
+  capturedAt: string;
+  perSource: Array<{
+    source: 'dynamicworld' | 'indiasat';
+    classId: number;
+    className: string;
+    classColor: string;
+    confidence: number | null;
+    asOf: string;
+    live: boolean;
+    agreement: 'agree' | 'disagree' | 'unsure' | 'unrated';
+    /** When the observer disagrees, the class they assert is actually present (from the same source's legend). */
+    observerClassId?: number;
+    observerClassName?: string;
+    notes?: string;
+    extras?: Record<string, unknown>;
+  }>;
+}
+
+/**
+ * v3 — Field-collected variables that meaningfully support LULC validation.
+ * All fields are optional; observers fill what they can verify on the ground.
+ */
+export interface LulcFieldData {
+  /** Top-down land-cover composition (% of visible plot, sums to ~100). */
+  coverComposition?: Array<{ cover: 'tree' | 'shrub' | 'grass' | 'crop' | 'water' | 'built' | 'bare' | 'other'; percent: number; note?: string }>;
+  /** Canopy cover for trees/forests (0-100%). */
+  canopyCoverPercent?: number;
+  /** Dominant species or crop (free text, observer-supplied). */
+  dominantSpecies?: string;
+  /** For croplands: crop type, growth stage, irrigation. */
+  crop?: {
+    type?: string;
+    stage?: 'pre-sowing' | 'sowing' | 'vegetative' | 'flowering' | 'fruiting' | 'mature' | 'harvested' | 'fallow';
+    irrigation?: 'rainfed' | 'irrigated_canal' | 'irrigated_borewell' | 'irrigated_other' | 'unknown';
+    season?: 'kharif' | 'rabi' | 'zaid';
+  };
+  /** For water bodies: permanence and quality observations. */
+  water?: {
+    permanence?: 'permanent' | 'seasonal' | 'ephemeral' | 'dry';
+    extentChange?: 'shrunk' | 'stable' | 'expanded';
+    note?: string;
+  };
+  /** For built-up: density and use. */
+  built?: {
+    density?: 'sparse' | 'moderate' | 'dense';
+    use?: 'residential' | 'commercial' | 'industrial' | 'road' | 'mixed' | 'unknown';
+  };
+  /** For trees/forest: structural notes. */
+  forest?: {
+    type?: 'native' | 'plantation' | 'mixed';
+    heightClass?: '<5m' | '5-15m' | '15-30m' | '>30m';
+    disturbance?: 'none' | 'logged' | 'burned' | 'grazed';
+  };
+  /** Observer confidence in their own ground-truth (0-1). */
+  fieldConfidence?: number;
+  /** Free-form qualitative notes. */
+  qualitativeNotes?: string;
+}
+
+/** v3 — Weather captured automatically at observation time (Open-Meteo). */
+export interface WeatherSnapshot {
+  fetchedAt: string;
+  source: 'open-meteo' | 'cached';
+  temperatureC?: number;
+  humidityPercent?: number;
+  precipitationMm?: number;
+  windSpeedKph?: number;
+  windDirectionDeg?: number;
+  weatherCode?: number;
+  description?: string;
+  isDay?: boolean;
 }
 
 export interface FilterState {

@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { coreStackService } from '../services/CoreStackService';
 import { dynamicWorldService } from '../services/DynamicWorldService';
 import { db } from '../db/database';
 import {
@@ -20,9 +19,7 @@ interface SettingsPanelProps {
 }
 
 const SettingsPanel: React.FC<SettingsPanelProps> = ({ onClose }) => {
-  const [coreStackApiKey, setCoreStackApiKey] = useState('');
   const [dwStatus, setDwStatus] = useState<{ mode: string; message: string; coverage?: string }>({ mode: 'loading', message: 'Checking...' });
-  const [saved, setSaved] = useState(false);
 
   // User Identity (Task 1.9.2)
   const [displayName, setDisplayName] = useState('');
@@ -56,12 +53,6 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ onClose }) => {
   const [mapPrefsSaved, setMapPrefsSaved] = useState(false);
 
   useEffect(() => {
-    // Load current API key
-    const currentKey = coreStackService.getApiKey();
-    if (currentKey) {
-      setCoreStackApiKey(currentKey);
-    }
-
     // Check DW status
     const checkDwStatus = async () => {
       await dynamicWorldService.loadOfflineData();
@@ -100,19 +91,6 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ onClose }) => {
     };
     loadStorageStats();
   }, []);
-
-  const handleSaveApiKey = () => {
-    coreStackService.setApiKey(coreStackApiKey);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
-  };
-
-  const handleClearApiKey = () => {
-    setCoreStackApiKey('');
-    coreStackService.setApiKey('');
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
-  };
 
   const handleSaveIdentity = () => {
     if (displayName.trim()) setUserName(displayName.trim());
@@ -297,38 +275,6 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ onClose }) => {
             <div className="settings-status" style={{ marginTop: 8 }}>
               <span className="status-dot active"></span>
               Device ID: <code style={{ fontSize: 10 }}>{deviceId.slice(0, 8)}…</code>
-            </div>
-          </div>
-
-          {/* CoreStack API Key */}
-          <div className="settings-section">
-            <h3>🌍 CoreStack API</h3>
-            <p className="settings-description">
-              Required for watershed data, admin boundaries, and KYL indicators.
-              <br />
-              <a href="https://core-stack.org/use-apis/" target="_blank" rel="noopener noreferrer">
-                Get an API key →
-              </a>
-            </p>
-            <div className="settings-input-group">
-              <input
-                type="password"
-                value={coreStackApiKey}
-                onChange={(e) => setCoreStackApiKey(e.target.value)}
-                placeholder="Enter your CoreStack API key"
-                className="settings-input"
-              />
-              <button onClick={handleSaveApiKey} className="settings-btn primary">
-                Save
-              </button>
-              <button onClick={handleClearApiKey} className="settings-btn">
-                Clear
-              </button>
-            </div>
-            {saved && <span className="settings-saved">✓ Saved</span>}
-            <div className="settings-status">
-              <span className={`status-dot ${coreStackService.hasApiKey() ? 'active' : 'inactive'}`}></span>
-              {coreStackService.hasApiKey() ? 'API key configured' : 'No API key set'}
             </div>
           </div>
 

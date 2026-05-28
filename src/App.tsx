@@ -36,6 +36,8 @@ function App() {
   const [indiasatYear, setIndiasatYear] = useState<IndiaSATYear>(LATEST_INDIASAT_YEAR);
   const [indiasatTileUrl, setIndiasatTileUrl] = useState<string | null>(null);
   const [indiasatTileError, setIndiasatTileError] = useState<string | null>(null);
+  const [dwTileUrl, setDwTileUrl] = useState<string | null>(null);
+  const [dwTileError, setDwTileError] = useState<string | null>(null);
 
   // Navigation
   const [activeTab, setActiveTab] = useState<TabType>('map');
@@ -97,19 +99,38 @@ function App() {
     return () => { cancelled = true; };
   }, [indiasatYear, activeOverlays]);
 
+  // Resolve Dynamic World tile URL when overlay is enabled
+  useEffect(() => {
+    if (!activeOverlays.has('dynamicworld')) return;
+    let cancelled = false;
+    setDwTileUrl(null);
+    setDwTileError(null);
+    dynamicWorldService.getLiveTileUrlTemplate().then(url => {
+      if (cancelled) return;
+      if (!url) setDwTileError('Dynamic World tiles unavailable — check the GEE proxy.');
+      else setDwTileUrl(url);
+    }).catch((err: unknown) => {
+      if (cancelled) return;
+      setDwTileError(`Dynamic World error: ${err instanceof Error ? err.message : String(err)}`);
+    });
+    return () => { cancelled = true; };
+  }, [activeOverlays]);
+
   // Layer list MapView consumes
   const layers = useMemo<DatasetLayer[]>(() => {
     const out: DatasetLayer[] = [];
-    out.push({
-      id: 'dynamicworld_live',
-      title: 'Dynamic World (live)',
-      type: 'raster',
-      source: { format: 'xyz', path: 'dynamicworld://live' },
-      style: { kind: 'image', opacity: 0.7 },
-      minZoom: 0, maxZoom: 19,
-      category: 'dynamicworld',
-      enabled: activeOverlays.has('dynamicworld'),
-    });
+    if (dwTileUrl && activeOverlays.has('dynamicworld')) {
+      out.push({
+        id: 'dynamicworld_live',
+        title: 'Dynamic World (live)',
+        type: 'raster',
+        source: { format: 'xyz', path: dwTileUrl },
+        style: { kind: 'image', opacity: 0.7 },
+        minZoom: 0, maxZoom: 19,
+        category: 'dynamicworld',
+        enabled: true,
+      });
+    }
     if (indiasatTileUrl && activeOverlays.has('indiasat')) {
       out.push({
         id: `indiasat_${indiasatYear}`,
@@ -124,14 +145,14 @@ function App() {
       });
     }
     return out;
-  }, [activeOverlays, indiasatTileUrl, indiasatYear]);
+  }, [activeOverlays, indiasatTileUrl, indiasatYear, dwTileUrl]);
 
   const activeLayerIds = useMemo(() => {
     const s = new Set<string>();
-    if (activeOverlays.has('dynamicworld')) s.add('dynamicworld_live');
-    if (activeOverlays.has('indiasat')) s.add(`indiasat_${indiasatYear}`);
+    if (dwTileUrl && activeOverlays.has('dynamicworld')) s.add('dynamicworld_live');
+    if (indiasatTileUrl && activeOverlays.has('indiasat')) s.add(`indiasat_${indiasatYear}`);
     return s;
-  }, [activeOverlays, indiasatYear]);
+  }, [activeOverlays, indiasatYear, dwTileUrl, indiasatTileUrl]);
 
   // Map interactions
   const handleMapMove = useCallback((newCenter: [number, number], newZoom: number) => {
@@ -257,6 +278,7 @@ function App() {
             activeOverlays={activeOverlays}
             indiasatYear={indiasatYear}
             indiasatTileError={indiasatTileError}
+            dwTileError={dwTileError}
             isOnline={isOnline}
             onToggle={handleOverlayToggle}
             onYearChange={setIndiasatYear}
@@ -308,11 +330,12 @@ const OverlayPanel: React.FC<{
   activeOverlays: Set<OverlayId>;
   indiasatYear: IndiaSATYear;
   indiasatTileError: string | null;
+  dwTileError: string | null;
   isOnline: boolean;
   onToggle: (id: OverlayId) => void;
   onYearChange: (y: IndiaSATYear) => void;
   onClose: () => void;
-}> = ({ activeOverlays, indiasatYear, indiasatTileError, isOnline, onToggle, onYearChange, onClose }) => {
+}> = ({ activeOverlays, indiasatYear, indiasatTileError, dwTileError, isOnline, onToggle, onYearChange, onClose }) => {
   return (
     <div className="panel-overlay">
       <div className="panel-header">
@@ -333,6 +356,7 @@ const OverlayPanel: React.FC<{
             </label>
           </header>
           {!isOnline && <p className="overlay-warn">Offline — live tiles unavailable.</p>}
+          {dwTileError && <p className="overlay-warn">{dwTileError}</p>}
           {activeOverlays.has('dynamicworld') && (
             <ul className="legend">
               {Object.entries(DW_CLASSES).map(([id, info]) => (

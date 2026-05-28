@@ -9,7 +9,6 @@
 import { db, dbReady, enqueueSyncItem, dequeueSyncItems, updateSyncQueueItem, purgeSyncQueue, getSyncQueueStats } from '../db/database';
 import { weatherService } from './WeatherService';
 import { dynamicWorldService } from './DynamicWorldService';
-import { coreStackService } from './CoreStackService';
 import type { SyncQueueItem, DatasetValues } from '../types';
 
 // ─── Public types ──────────────────────────────────────────────────
@@ -141,28 +140,6 @@ class SyncEngine {
       console.warn('[SyncEngine] Dynamic World enrichment failed:', e);
       enrichedData['dw_data_type'] = 'ERROR';
       enrichedData['dw_note'] = e instanceof Error ? e.message : 'Failed to fetch land cover';
-    }
-
-    // 3. CoreStack
-    try {
-      if (coreStackService.isAvailable()) {
-        const coreData = await coreStackService.enrichLocation(lat, lon);
-        if (coreData?.admin) {
-          enrichedData['corestack_state'] = coreData.admin.state_name;
-          enrichedData['corestack_district'] = coreData.admin.district_name;
-          enrichedData['corestack_tehsil'] = coreData.admin.tehsil_name;
-          enrichedData['corestack_mws_id'] = coreData.mwsId;
-          enrichedData['corestack_source'] = 'CoreStack API';
-          sources.push('corestack');
-        }
-        if (coreData?.indicators) {
-          for (const ind of coreData.indicators) {
-            enrichedData[`corestack_${ind.indicator_name.toLowerCase().replace(/\s+/g, '_')}`] = ind.value;
-          }
-        }
-      }
-    } catch (e) {
-      console.warn('[SyncEngine] CoreStack enrichment failed:', e);
     }
 
     // Save enriched data

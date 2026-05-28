@@ -72,3 +72,5 @@ releases/*.apk
 
 # Release APKs
 releases/*.apk
+
+tsc-out.txt

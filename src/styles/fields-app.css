@@ -24,6 +24,8 @@
   pointer-events: none;
 }
 .fields-prediction-anchor .prediction-card { pointer-events: auto; }
+/* Empty state must let map clicks pass through so users can pin a location. */
+.fields-prediction-anchor .prediction-card--empty { pointer-events: none; }
 
 .prediction-card {
   background: var(--fields-bg);

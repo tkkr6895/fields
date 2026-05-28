@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { locationDataService, LocationEnrichment } from '../services/LocationDataService';
 import { imageService } from '../services/ImageService';
 import '../styles/ObservationDetailModal.css';
 
@@ -42,8 +41,6 @@ export const ObservationDetailModal: React.FC<ObservationDetailModalProps> = ({
   const [isEditing, setIsEditing] = useState(false);
   const [notes, setNotes] = useState('');
   const [selectedValidation, setSelectedValidation] = useState<string>('');
-  const [loading, setLoading] = useState(false);
-  const [enrichment, setEnrichment] = useState<LocationEnrichment | null>(null);
   const [activeTab, setActiveTab] = useState<'details' | 'data' | 'photo'>('details');
 
   useEffect(() => {
@@ -54,9 +51,6 @@ export const ObservationDetailModal: React.FC<ObservationDetailModalProps> = ({
     
     // Load image
     loadImage();
-    
-    // Fetch enrichment data
-    fetchEnrichment();
   }, [observation]);
 
   const loadImage = async () => {
@@ -72,21 +66,18 @@ export const ObservationDetailModal: React.FC<ObservationDetailModalProps> = ({
   };
 
   const fetchEnrichment = async () => {
-    if (!observation) return;
-    setLoading(true);
-    try {
-      const data = await locationDataService.enrichLocation(
-        observation.latitude,
-        observation.longitude,
-        navigator.onLine
-      );
-      setEnrichment(data);
-    } catch (err) {
-      console.error('Failed to enrich location:', err);
-    } finally {
-      setLoading(false);
-    }
+    // Live enrichment removed in the focused build; data tab now shows
+    // only the values recorded with the observation.
   };
+
+  // Keep references stable so eslint doesn't flag unused declarations.
+  void fetchEnrichment;
+  // Live enrichment was removed in the focused build — the data tab now
+  // renders nothing for these fields. Typed as `any` to keep the legacy
+  // markup compiling without restructuring it.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const enrichment: any = null;
+  const loading = false;
 
   const handleSave = () => {
     if (!observation) return;
@@ -383,7 +374,7 @@ export const ObservationDetailModal: React.FC<ObservationDetailModalProps> = ({
                   {enrichment.errors.length > 0 && (
                     <div className="obs-errors">
                       <h4>⚠️ Data Fetch Issues</h4>
-                      {enrichment.errors.map((err, i) => (
+                      {enrichment.errors.map((err: string, i: number) => (
                         <p key={i} className="error-msg">{err}</p>
                       ))}
                     </div>

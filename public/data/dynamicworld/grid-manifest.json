@@ -1,14 +1,14 @@
 {
   "version": "1.0.0",
-  "timestamp": "2026-03-04T11:07:01.584624Z",
+  "timestamp": "2026-03-04T11:52:45.477862Z",
   "bounds": {
     "north": 21.5,
     "south": 8.0,
     "east": 78.5,
     "west": 72.5
   },
-  "resolution": 5000,
-  "cellCount": 38630,
+  "resolution": 3000,
+  "cellCount": 5000,
   "year": 2026,
   "compositeDays": 365
 }

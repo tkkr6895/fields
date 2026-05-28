@@ -1,0 +1,16 @@
+Login flow for commons connect unclear. Navigated the youtube tutorials and the dashboard, no provision for a phone number required at login
+
+
+
+
+Issues to overcome: 
+- The layers don't load when in satellite view of the basemap 
+- Projection systems mismatch. Check that all layers being served are harmonized with the projection used for the basemaps
+- Search functionality doesn't work 
+- 92+ core stack layers make no sense. Please categorise them better
+- Most of the core stack layers return the same rasters/polygons. It's not at all contextual
+- WHat to make of the MWS centroid data
+-For LULC data, no legend to interpret visualisation
+- Village layers not visible
+- The updated on-tap screen with 3 tabs is not visible 
+- Low priority: GEE auth didn't work during demo

@@ -2,9 +2,9 @@
 
 ## RUN THIS FIRST
 ```bash
-cd "c:\Users\trkumar\OneDrive - Deloitte (O365D)\Documents\Research\Western Ghats\field-validator-app"
+cd field-validator-app
 npm run dev
-# → http://localhost:5174
+# → http://localhost:5173
 ```
 
 ---

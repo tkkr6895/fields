@@ -143,12 +143,10 @@ capacitor.config.ts   # Capacitor Android/iOS config
 
 ---
 
-## 📦 GitHub Repository
+## GitHub Repository
 
 - **Repo:** `https://github.com/tkkr6895/fields.git`
 - **Branch:** `main`
-- **Latest Commit:** `db28575` (50 files, 9,795 insertions, session 7)
-- **Open Issues:** 13 (all created today, Phase 1/2/3 planning)
 - **Build:** `npm run dev` (Vite dev server), `npm run build` (production build)
 - **Android:** `npx cap sync android && cd android && ./gradlew assembleDebug`
 
@@ -251,15 +249,12 @@ When the mentor email discussion is attached:
 
 ---
 
-## 🔗 Quick Links
+## Quick Links
 
 - **GitHub Repo:** https://github.com/tkkr6895/fields
-- **Latest Commit:** https://github.com/tkkr6895/fields/commit/db28575
 - **Open Issues:** https://github.com/tkkr6895/fields/issues
-- **Local Workspace:** `c:\Users\trkumar\OneDrive - Deloitte (O365D)\Documents\Research\Western Ghats\field-validator-app`
 - **Dev Server:** http://localhost:5173 (after `npm run dev`)
 
 ---
 
-**Last Updated:** March 14, 2026 (Session 7)  
-**Next Session:** Mentor feedback implementation + demo prep
+**Last Updated:** May 2026

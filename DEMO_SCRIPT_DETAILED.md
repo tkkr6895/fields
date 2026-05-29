@@ -9,11 +9,11 @@
 
 ```bash
 # Navigate to project root
-cd "c:\Users\trkumar\OneDrive - Deloitte (O365D)\Documents\Research\Western Ghats\field-validator-app"
+cd field-validator-app
 
 # Start the development server
 npm run dev
-# → Vite opens at http://localhost:5174
+# → Vite opens at http://localhost:5173
 
 # OPTIONAL: If you want to test live Dynamic World data (requires GEE credentials)
 # In another terminal:

@@ -13,6 +13,7 @@ import { syncEngine } from './services/SyncEngine';
 import { db } from './db/database';
 import { dynamicWorldService, DW_CLASSES } from './services/DynamicWorldService';
 import { indiaSatService, INDIASAT_CLASSES, INDIASAT_YEARS, type IndiaSATYear, LATEST_INDIASAT_YEAR } from './services/IndiaSATService';
+import { rasterLayerService } from './services/RasterLayerService';
 import {
   fetchPredictionSnapshot,
   PREDICTION_SOURCES,
@@ -27,6 +28,15 @@ type OverlayId = 'dynamicworld' | 'indiasat';
 
 const WG_DEFAULT_CENTER: [number, number] = [75.5, 13.0];
 
+/** Forest overlay layer definitions (static PNGs from image-manifest). */
+const FOREST_LAYERS = [
+  { id: 'raster_natural_forest_80', label: 'Natural Forest (≥80%)', color: '#2d6a4f' },
+  { id: 'raster_natural_forest_52', label: 'Natural Forest (≥52%)', color: '#52b788' },
+  { id: 'raster_plantations', label: 'Plantations', color: '#e9c46a' },
+  { id: 'raster_old_growth', label: 'Old Growth', color: '#1b4332' },
+  { id: 'raster_forest_typology', label: 'Forest Typology Composite', color: '#8ecae6' },
+] as const;
+
 function App() {
   // Map state
   const [center, setCenter] = useState<[number, number]>(WG_DEFAULT_CENTER);
@@ -38,6 +48,10 @@ function App() {
   const [indiasatTileError, setIndiasatTileError] = useState<string | null>(null);
   const [dwTileUrl, setDwTileUrl] = useState<string | null>(null);
   const [dwTileError, setDwTileError] = useState<string | null>(null);
+
+  // Forest overlay layers (static PNGs)
+  const [forestLayers, setForestLayers] = useState<DatasetLayer[]>([]);
+  const [activeForestLayers, setActiveForestLayers] = useState<Set<string>>(new Set());
 
   // Navigation
   const [activeTab, setActiveTab] = useState<TabType>('map');
@@ -65,6 +79,12 @@ function App() {
   useEffect(() => {
     syncEngine.startAutoSync();
     geoService.current.watchPosition((loc) => setCurrentLocation(loc));
+
+    // Load forest overlay layers from manifest
+    rasterLayerService.getRasterLayers().then(all => {
+      const forest = all.filter(l => l.category === 'forest');
+      setForestLayers(forest);
+    });
 
     const refreshCounts = async () => {
       try {
@@ -144,15 +164,22 @@ function App() {
         enabled: true,
       });
     }
+    // Include active forest overlay layers
+    for (const fl of forestLayers) {
+      if (activeForestLayers.has(fl.id)) {
+        out.push(fl);
+      }
+    }
     return out;
-  }, [activeOverlays, indiasatTileUrl, indiasatYear, dwTileUrl]);
+  }, [activeOverlays, indiasatTileUrl, indiasatYear, dwTileUrl, forestLayers, activeForestLayers]);
 
   const activeLayerIds = useMemo(() => {
     const s = new Set<string>();
     if (dwTileUrl && activeOverlays.has('dynamicworld')) s.add('dynamicworld_live');
     if (indiasatTileUrl && activeOverlays.has('indiasat')) s.add(`indiasat_${indiasatYear}`);
+    for (const id of activeForestLayers) s.add(id);
     return s;
-  }, [activeOverlays, indiasatYear, dwTileUrl, indiasatTileUrl]);
+  }, [activeOverlays, indiasatYear, dwTileUrl, indiasatTileUrl, activeForestLayers]);
 
   // Map interactions
   const handleMapMove = useCallback((newCenter: [number, number], newZoom: number) => {
@@ -182,6 +209,14 @@ function App() {
     setActiveOverlays(prev => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const handleForestToggle = useCallback((layerId: string) => {
+    setActiveForestLayers(prev => {
+      const next = new Set(prev);
+      if (next.has(layerId)) next.delete(layerId); else next.add(layerId);
       return next;
     });
   }, []);
@@ -282,6 +317,9 @@ function App() {
             isOnline={isOnline}
             onToggle={handleOverlayToggle}
             onYearChange={setIndiasatYear}
+            forestLayers={FOREST_LAYERS}
+            activeForestLayers={activeForestLayers}
+            onForestToggle={handleForestToggle}
             onClose={() => setActiveTab('map')}
           />
         )}
@@ -334,8 +372,11 @@ const OverlayPanel: React.FC<{
   isOnline: boolean;
   onToggle: (id: OverlayId) => void;
   onYearChange: (y: IndiaSATYear) => void;
+  forestLayers: readonly { id: string; label: string; color: string }[];
+  activeForestLayers: Set<string>;
+  onForestToggle: (id: string) => void;
   onClose: () => void;
-}> = ({ activeOverlays, indiasatYear, indiasatTileError, dwTileError, isOnline, onToggle, onYearChange, onClose }) => {
+}> = ({ activeOverlays, indiasatYear, indiasatTileError, dwTileError, isOnline, onToggle, onYearChange, forestLayers, activeForestLayers, onForestToggle, onClose }) => {
   return (
     <div className="panel-overlay">
       <div className="panel-header">
@@ -401,11 +442,35 @@ const OverlayPanel: React.FC<{
           )}
         </section>
 
+        <section className="overlay-card">
+          <header>
+            <div>
+              <strong>🌳 Forest vs. Plantation</strong>
+              <small>Google Research · Natural Forest 2020 (10 m)</small>
+              <small>AI-based separation of natural forests from tree plantations</small>
+            </div>
+          </header>
+          <div className="forest-layer-list">
+            {forestLayers.map(fl => (
+              <label key={fl.id} className="forest-layer-toggle">
+                <input
+                  type="checkbox"
+                  checked={activeForestLayers.has(fl.id)}
+                  onChange={() => onForestToggle(fl.id)}
+                />
+                <span className="legend-swatch" style={{ background: fl.color }} />
+                <span>{fl.label}</span>
+              </label>
+            ))}
+          </div>
+        </section>
+
         <section className="overlay-attribution">
           <small>
             Sources: <a href={PREDICTION_SOURCES.dynamicworld.providerUrl} target="_blank" rel="noreferrer">Dynamic World</a>{' · '}
-            <a href={PREDICTION_SOURCES.indiasat.providerUrl} target="_blank" rel="noreferrer">IndiaSAT LULC (CoRE Stack)</a>.
-            All live predictions are served via Google Earth Engine through the configured proxy.
+            <a href={PREDICTION_SOURCES.indiasat.providerUrl} target="_blank" rel="noreferrer">IndiaSAT LULC (CoRE Stack)</a>{' · '}
+            <a href="https://research.google/blog/separating-natural-forests-from-other-tree-cover-with-ai-for-deforestation-free-supply-chains/" target="_blank" rel="noreferrer">Natural Forest 2020 (Google Research)</a>.
+            Live predictions via Google Earth Engine proxy. Forest layers rendered from pre-computed 10 m classifications.
           </small>
         </section>
       </div>

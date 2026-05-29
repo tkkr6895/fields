@@ -163,8 +163,8 @@ Report bugs or feature requests via GitHub Issues.
 
 ### Contact
 
-Project maintained by Western Ghats Research team.
+For questions or contributions, please open a [GitHub Issue](https://github.com/tkkr6895/fields/issues).
 
 ---
 
-*Documentation last updated: 2025*
+*Documentation last updated: May 2026*

@@ -132,6 +132,40 @@ const MapView = forwardRef<MapViewRef, MapViewProps>(
         return;
       }
       for (const layer of layers) {
+        // Handle static image overlays (PNG with bounds)
+        if (layer.type === 'image-overlay' && layer.source.format === 'png' && layer.bounds) {
+          const sourceId = `source-${layer.id}`;
+          const layerId = `layer-${layer.id}`;
+          const isActive = activeLayers.has(layer.id);
+          try {
+            if (!m.getSource(sourceId)) {
+              const { west, south, east, north } = layer.bounds;
+              m.addSource(sourceId, {
+                type: 'image',
+                url: layer.source.path,
+                coordinates: [
+                  [west, north],  // top-left
+                  [east, north],  // top-right
+                  [east, south],  // bottom-right
+                  [west, south],  // bottom-left
+                ],
+              });
+              m.addLayer({
+                id: layerId,
+                type: 'raster',
+                source: sourceId,
+                paint: { 'raster-opacity': layer.style?.opacity ?? 0.7, 'raster-fade-duration': 0 },
+                layout: { visibility: isActive ? 'visible' : 'none' },
+              });
+            } else if (m.getLayer(layerId)) {
+              m.setLayoutProperty(layerId, 'visibility', isActive ? 'visible' : 'none');
+            }
+          } catch (err) {
+            console.warn(`Failed to add image overlay ${layer.id}:`, err);
+          }
+          continue;
+        }
+
         if (layer.type !== 'raster' || layer.source.format !== 'xyz') continue;
         const tile = layer.source.path;
         if (!tile || tile.startsWith('dynamicworld://') || tile.startsWith('indiasat://')) {

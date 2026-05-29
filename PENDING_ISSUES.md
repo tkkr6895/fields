@@ -11,7 +11,7 @@ Last updated: 2025-07-14
 The old path `projects/ee-indiasat/assets/LULC_CombinedOutputs_WithConfidence`
 was never accessible. The real CoRE Stack v4 data lives at
 `projects/corestack-trees/assets/LULC_v4/lulc_v4_<year>_<year+1>` and
-is fully accessible from GEE project `ee-tkkrfirst`. All 7 years
+is fully accessible from the configured GEE project. All 7 years
 (2017–2023) verified with band `predicted_label`.
 
 - `resolveIndiaSATAsset` tries v4 first, then v3 fallback at

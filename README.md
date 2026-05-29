@@ -178,6 +178,46 @@ Sample observations collected during field validation are available in the repos
 
 These samples demonstrate the data structure and can be used as reference for analysis workflows.
 
+## Data Export
+
+The application provides multiple export pipelines for different downstream use cases. All exports operate on locally stored IndexedDB observations and can be triggered from Settings.
+
+### Export Formats
+
+| Format | Contents | Images | Use Case |
+|--------|----------|--------|----------|
+| **Standard ZIP** | JSON + GeoJSON + CSV + manifest | Yes | Backup, GIS analysis, data recovery |
+| **Lightweight** | JSON + GeoJSON + CSV (no images) | No | Cloud sync, quick sharing |
+| **GeoAI Bundle** | GeoJSON + CSV + STAC Items + COCO manifest + model card + SHA-256 checksums | Yes | ML training, ground-truth validation |
+| **STAC-Only** | STAC Item Collection JSON | No | Interoperability with geospatial catalogues |
+| **PBR** | Species checklist + GeoJSON + Traditional Knowledge records (consent-gated) | Optional | People's Biodiversity Register submissions |
+
+### Exported Fields per Observation
+
+Each observation record includes:
+
+- **Spatial**: GPS coordinates, accuracy (m), altitude, administrative context (state/district/tehsil)
+- **Temporal**: ISO timestamp, derived season (monsoon/post-monsoon/winter/summer)
+- **Predictions**: Dynamic World class + confidence + all-class probabilities; IndiaSAT class + year
+- **Validation**: Per-source agreement (agree/disagree/unsure), observer's corrected class when disagreeing
+- **Ground truth**: Cover composition (tree/shrub/grass/crop/water/built/bare/other with abundance), canopy cover %, dominant species, forest type/height/disturbance, crop stage/irrigation/season, water permanence
+- **Weather**: Temperature, humidity, precipitation, wind speed/direction (auto-captured at submission via Open-Meteo)
+- **Photo**: Geotagged JPEG with EXIF metadata, SHA-256 checksum (in GeoAI exports)
+- **Provenance**: Observer confidence (1–5), device ID, sync status, enrichment sources
+
+### IndiaSAT Ground-Truth Compatibility
+
+The GeoAI export (`exportGeoAI()`) produces a ready-to-ingest package for LULC model retraining. For each observation it includes:
+
+1. The IndiaSAT prediction (class ID, class name, year) that was shown to the observer
+2. The observer's agreement or disagreement, with the corrected class if they disagreed
+3. Fractional cover composition matching the FAO LCCS approach (percentage per cover type)
+4. A geotagged photo with SHA-256 integrity check
+5. Weather conditions at the time of observation
+6. STAC Item metadata for catalogue integration
+
+Incremental export (`exportGeoAI({ incremental: true })`) sends only observations captured since the last export, suitable for periodic data shipments.
+
 ## API Integration
 
 ### CoRE Stack APIs

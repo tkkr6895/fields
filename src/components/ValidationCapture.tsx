@@ -86,7 +86,7 @@ const ValidationCapture: React.FC<ValidationCaptureProps> = ({ focusLocation, sn
   const [field, setField] = useState<LulcFieldData>({});
 
   // Step 3 — notes & confidence
-  const [fieldConfidence, setFieldConfidence] = useState<number>(0.8);
+  const [fieldConfidence, setFieldConfidence] = useState<number>(0.7);
   const [qualNotes, setQualNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -179,17 +179,41 @@ const ValidationCapture: React.FC<ValidationCaptureProps> = ({ focusLocation, sn
     return topics;
   }, [snapshot, perSource, sources]);
 
-  // Helpers for cover composition
-  const setCoverPercent = (cover: string, percent: number) => {
+  // Helpers for cover composition — tappable abundance levels
+  type AbundanceLevel = 'absent' | 'trace' | 'minor' | 'present' | 'major' | 'dominant';
+  const ABUNDANCE_LEVELS: { key: AbundanceLevel; label: string; percent: number }[] = [
+    { key: 'absent',   label: '—',        percent: 0 },
+    { key: 'trace',    label: 'Trace',     percent: 5 },
+    { key: 'minor',    label: 'Minor',     percent: 15 },
+    { key: 'present',  label: 'Some',      percent: 30 },
+    { key: 'major',    label: 'Major',     percent: 50 },
+    { key: 'dominant', label: 'Dominant',  percent: 70 },
+  ];
+  const COVER_LABELS: Record<string, string> = {
+    tree: '🌳 Tree', shrub: '🌿 Shrub', grass: '🌾 Grass', crop: '🌾 Crop',
+    water: '💧 Water', built: '🏘 Built', bare: '🪨 Bare', other: '❓ Other',
+  };
+
+  const getAbundanceLevel = (cover: string): AbundanceLevel => {
+    const pct = field.coverComposition?.find(c => c.cover === cover)?.percent ?? 0;
+    if (pct === 0) return 'absent';
+    if (pct <= 5) return 'trace';
+    if (pct <= 15) return 'minor';
+    if (pct <= 30) return 'present';
+    if (pct <= 50) return 'major';
+    return 'dominant';
+  };
+
+  const setCoverLevel = (cover: string, level: AbundanceLevel) => {
+    const pct = ABUNDANCE_LEVELS.find(l => l.key === level)?.percent ?? 0;
     setField(prev => {
       const existing = prev.coverComposition || [];
       const next = existing.filter(e => e.cover !== cover);
-      if (percent > 0) next.push({ cover: cover as any, percent });
+      if (pct > 0) next.push({ cover: cover as any, percent: pct });
       return { ...prev, coverComposition: next.sort((a, b) => b.percent - a.percent) };
     });
   };
-  const getCoverPercent = (cover: string): number =>
-    field.coverComposition?.find(c => c.cover === cover)?.percent ?? 0;
+
   const coverTotal = (field.coverComposition || []).reduce((s, c) => s + c.percent, 0);
 
   // Step 1 validation
@@ -382,45 +406,71 @@ const ValidationCapture: React.FC<ValidationCaptureProps> = ({ focusLocation, sn
               </div>
 
               <div className="vc-field-block">
-                <h4>Cover composition (% of plot)</h4>
-                <p className="vc-help">Estimate what fraction of the visible plot is each cover type. This is the most useful variable for mixed-pixel validation.</p>
-                <div className="vc-cover-grid">
-                  {(['tree', 'shrub', 'grass', 'crop', 'water', 'built', 'bare', 'other'] as const).map(c => (
-                    <label key={c} className="vc-cover-row">
-                      <span className="vc-cover-row__name">{c}</span>
-                      <input
-                        type="range" min={0} max={100} step={5}
-                        value={getCoverPercent(c)}
-                        onChange={(e) => setCoverPercent(c, Number(e.target.value))}
-                      />
-                      <span className="vc-cover-row__val">{getCoverPercent(c)}%</span>
-                    </label>
-                  ))}
+                <h4>What cover types do you see?</h4>
+                <p className="vc-help">Tap each cover type to set its abundance. These are rough estimates — don't worry about exact percentages.</p>
+                <div className="vc-cover-chips">
+                  {(['tree', 'shrub', 'grass', 'crop', 'water', 'built', 'bare', 'other'] as const).map(c => {
+                    const level = getAbundanceLevel(c);
+                    return (
+                      <div key={c} className="vc-cover-chip-row">
+                        <span className="vc-cover-chip-label">{COVER_LABELS[c]}</span>
+                        <div className="vc-cover-chip-levels">
+                          {ABUNDANCE_LEVELS.map(al => (
+                            <button
+                              key={al.key}
+                              className={`vc-chip ${level === al.key ? 'vc-chip--on' : ''} ${al.key === 'absent' ? 'vc-chip--absent' : ''}`}
+                              onClick={() => setCoverLevel(c, al.key)}
+                              type="button"
+                            >
+                              {al.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
-                <div className={`vc-cover-total ${coverTotal === 100 ? 'ok' : coverTotal > 100 ? 'over' : 'low'}`}>
-                  Total: {coverTotal}% {coverTotal === 100 ? '✓' : coverTotal > 100 ? '· over 100%' : '· should sum to 100%'}
+                <div className={`vc-cover-total ${coverTotal > 0 ? 'ok' : ''}`}>
+                  {coverTotal > 0 ? `~${coverTotal}% accounted for` : 'No cover types selected yet'}
                 </div>
               </div>
 
               {surfacedTopics.has('forest') && (
                 <div className="vc-field-block">
-                  <h4>Trees / Forest</h4>
-                  <label>Canopy cover %
-                    <input type="number" min={0} max={100} value={field.canopyCoverPercent ?? ''} onChange={(e) => setField(f => ({ ...f, canopyCoverPercent: e.target.value === '' ? undefined : Number(e.target.value) }))} />
+                  <h4>🌳 Trees / Forest</h4>
+                  <label className="vc-field-label">Canopy cover
+                    <div className="vc-category-btns">
+                      {([
+                        { value: 15,  label: 'Open', desc: '<25%' },
+                        { value: 40,  label: 'Moderate', desc: '25–50%' },
+                        { value: 65,  label: 'Dense', desc: '50–75%' },
+                        { value: 90,  label: 'Closed', desc: '>75%' },
+                      ] as const).map(opt => (
+                        <button
+                          key={opt.value}
+                          type="button"
+                          className={`vc-cat-btn ${field.canopyCoverPercent === opt.value ? 'vc-cat-btn--on' : ''}`}
+                          onClick={() => setField(f => ({ ...f, canopyCoverPercent: f.canopyCoverPercent === opt.value ? undefined : opt.value }))}
+                        >
+                          <span>{opt.label}</span>
+                          <small>{opt.desc}</small>
+                        </button>
+                      ))}
+                    </div>
                   </label>
-                  <label>Forest type
+                  <label className="vc-field-label">Forest type
                     <select value={field.forest?.type ?? ''} onChange={(e) => setField(f => ({ ...f, forest: { ...f.forest, type: (e.target.value || undefined) as any } }))}>
-                      <option value="">—</option><option value="native">Native</option><option value="plantation">Plantation</option><option value="mixed">Mixed</option>
+                      <option value="">Select…</option><option value="native">Native</option><option value="plantation">Plantation</option><option value="mixed">Mixed</option>
                     </select>
                   </label>
-                  <label>Height class
+                  <label className="vc-field-label">Height class
                     <select value={field.forest?.heightClass ?? ''} onChange={(e) => setField(f => ({ ...f, forest: { ...f.forest, heightClass: (e.target.value || undefined) as any } }))}>
-                      <option value="">—</option><option value="<5m">&lt;5 m</option><option value="5-15m">5–15 m</option><option value="15-30m">15–30 m</option><option value=">30m">&gt;30 m</option>
+                      <option value="">Select…</option><option value="<5m">&lt;5 m</option><option value="5-15m">5–15 m</option><option value="15-30m">15–30 m</option><option value=">30m">&gt;30 m</option>
                     </select>
                   </label>
-                  <label>Disturbance
+                  <label className="vc-field-label">Disturbance
                     <select value={field.forest?.disturbance ?? ''} onChange={(e) => setField(f => ({ ...f, forest: { ...f.forest, disturbance: (e.target.value || undefined) as any } }))}>
-                      <option value="">—</option><option value="none">None</option><option value="logged">Logged</option><option value="burned">Burned</option><option value="grazed">Grazed</option>
+                      <option value="">Select…</option><option value="none">None visible</option><option value="logged">Logged</option><option value="burned">Burned</option><option value="grazed">Grazed</option>
                     </select>
                   </label>
                 </div>
@@ -428,24 +478,24 @@ const ValidationCapture: React.FC<ValidationCaptureProps> = ({ focusLocation, sn
 
               {surfacedTopics.has('crop') && (
                 <div className="vc-field-block">
-                  <h4>Cropland</h4>
-                  <label>Crop type
+                  <h4>🌾 Cropland</h4>
+                  <label className="vc-field-label">Crop type
                     <input type="text" placeholder="e.g. paddy, ragi, sugarcane" value={field.crop?.type ?? ''} onChange={(e) => setField(f => ({ ...f, crop: { ...f.crop, type: e.target.value || undefined } }))} />
                   </label>
-                  <label>Growth stage
+                  <label className="vc-field-label">Growth stage
                     <select value={field.crop?.stage ?? ''} onChange={(e) => setField(f => ({ ...f, crop: { ...f.crop, stage: (e.target.value || undefined) as any } }))}>
-                      <option value="">—</option>
+                      <option value="">Select…</option>
                       {CROP_STAGES.map(s => <option key={s} value={s}>{s}</option>)}
                     </select>
                   </label>
-                  <label>Irrigation
+                  <label className="vc-field-label">Irrigation
                     <select value={field.crop?.irrigation ?? ''} onChange={(e) => setField(f => ({ ...f, crop: { ...f.crop, irrigation: (e.target.value || undefined) as any } }))}>
-                      <option value="">—</option><option value="rainfed">Rainfed</option><option value="irrigated_canal">Canal</option><option value="irrigated_borewell">Borewell</option><option value="irrigated_other">Other irrigated</option><option value="unknown">Unknown</option>
+                      <option value="">Select…</option><option value="rainfed">Rainfed</option><option value="irrigated_canal">Canal</option><option value="irrigated_borewell">Borewell</option><option value="irrigated_other">Other irrigated</option><option value="unknown">Unknown</option>
                     </select>
                   </label>
-                  <label>Season
+                  <label className="vc-field-label">Season
                     <select value={field.crop?.season ?? ''} onChange={(e) => setField(f => ({ ...f, crop: { ...f.crop, season: (e.target.value || undefined) as any } }))}>
-                      <option value="">—</option><option value="kharif">Kharif</option><option value="rabi">Rabi</option><option value="zaid">Zaid</option>
+                      <option value="">Select…</option><option value="kharif">Kharif</option><option value="rabi">Rabi</option><option value="zaid">Zaid</option>
                     </select>
                   </label>
                 </div>
@@ -453,15 +503,15 @@ const ValidationCapture: React.FC<ValidationCaptureProps> = ({ focusLocation, sn
 
               {surfacedTopics.has('water') && (
                 <div className="vc-field-block">
-                  <h4>Water body</h4>
-                  <label>Permanence
+                  <h4>💧 Water body</h4>
+                  <label className="vc-field-label">Permanence
                     <select value={field.water?.permanence ?? ''} onChange={(e) => setField(f => ({ ...f, water: { ...f.water, permanence: (e.target.value || undefined) as any } }))}>
-                      <option value="">—</option><option value="permanent">Permanent</option><option value="seasonal">Seasonal</option><option value="ephemeral">Ephemeral</option><option value="dry">Dry today</option>
+                      <option value="">Select…</option><option value="permanent">Permanent</option><option value="seasonal">Seasonal</option><option value="ephemeral">Ephemeral</option><option value="dry">Dry today</option>
                     </select>
                   </label>
-                  <label>Extent change vs typical
+                  <label className="vc-field-label">Extent vs typical
                     <select value={field.water?.extentChange ?? ''} onChange={(e) => setField(f => ({ ...f, water: { ...f.water, extentChange: (e.target.value || undefined) as any } }))}>
-                      <option value="">—</option><option value="shrunk">Shrunk</option><option value="stable">Stable</option><option value="expanded">Expanded</option>
+                      <option value="">Select…</option><option value="shrunk">Shrunk</option><option value="stable">Stable</option><option value="expanded">Expanded</option>
                     </select>
                   </label>
                 </div>
@@ -469,15 +519,15 @@ const ValidationCapture: React.FC<ValidationCaptureProps> = ({ focusLocation, sn
 
               {surfacedTopics.has('built') && (
                 <div className="vc-field-block">
-                  <h4>Built-up</h4>
-                  <label>Density
+                  <h4>🏘 Built-up</h4>
+                  <label className="vc-field-label">Density
                     <select value={field.built?.density ?? ''} onChange={(e) => setField(f => ({ ...f, built: { ...f.built, density: (e.target.value || undefined) as any } }))}>
-                      <option value="">—</option><option value="sparse">Sparse</option><option value="moderate">Moderate</option><option value="dense">Dense</option>
+                      <option value="">Select…</option><option value="sparse">Sparse</option><option value="moderate">Moderate</option><option value="dense">Dense</option>
                     </select>
                   </label>
-                  <label>Use
+                  <label className="vc-field-label">Use
                     <select value={field.built?.use ?? ''} onChange={(e) => setField(f => ({ ...f, built: { ...f.built, use: (e.target.value || undefined) as any } }))}>
-                      <option value="">—</option><option value="residential">Residential</option><option value="commercial">Commercial</option><option value="industrial">Industrial</option><option value="road">Road/transport</option><option value="mixed">Mixed</option><option value="unknown">Unknown</option>
+                      <option value="">Select…</option><option value="residential">Residential</option><option value="commercial">Commercial</option><option value="industrial">Industrial</option><option value="road">Road/transport</option><option value="mixed">Mixed</option><option value="unknown">Unknown</option>
                     </select>
                   </label>
                 </div>
@@ -493,12 +543,30 @@ const ValidationCapture: React.FC<ValidationCaptureProps> = ({ focusLocation, sn
           {step === 3 && (
             <section className="vc-section">
               <h3>Final notes</h3>
-              <label>Qualitative notes
+              <label className="vc-field-label">Qualitative notes
                 <textarea rows={4} value={qualNotes} placeholder="Anything else that helps a remote analyst — landmarks, unusual conditions, recent changes…" onChange={(e) => setQualNotes(e.target.value)} />
               </label>
-              <label>Your confidence in this observation: {Math.round(fieldConfidence * 100)}%
-                <input type="range" min={0} max={1} step={0.05} value={fieldConfidence} onChange={(e) => setFieldConfidence(Number(e.target.value))} />
-              </label>
+              <div className="vc-field-block">
+                <h4>How confident are you?</h4>
+                <p className="vc-help">Rate your overall confidence in this observation.</p>
+                <div className="vc-confidence-btns">
+                  {([
+                    { value: 0.4, label: 'Low', desc: 'Unsure / obstructed view' },
+                    { value: 0.7, label: 'Medium', desc: 'Fairly confident' },
+                    { value: 0.95, label: 'High', desc: 'Very clear on the ground' },
+                  ] as const).map(opt => (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      className={`vc-cat-btn ${fieldConfidence === opt.value ? 'vc-cat-btn--on' : ''}`}
+                      onClick={() => setFieldConfidence(opt.value)}
+                    >
+                      <span>{opt.label}</span>
+                      <small>{opt.desc}</small>
+                    </button>
+                  ))}
+                </div>
+              </div>
 
               <details className="vc-review" open>
                 <summary>Review</summary>

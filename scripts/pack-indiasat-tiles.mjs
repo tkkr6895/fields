@@ -22,13 +22,9 @@
  *     --year 2022 \
  *     --bbox 75.0,12.5,76.0,13.5 \
  *     --minZoom 8 --maxZoom 12
- *
- * STATUS:
- *   Authoring complete. Cannot be validated end-to-end from this account
- *   because `projects/ee-indiasat/assets/LULC_CombinedOutputs_WithConfidence`
- *   is not currently shared with the user's GEE project. See PENDING_ISSUES.md
- *   issue #14 for the access request. Once the asset is readable the script
- *   should run without modification.
+ *   STATUS:
+ *   Authoring complete. Uses v4 assets at projects/corestack-trees/assets/LULC_v4/
+ *   (verified accessible) with v3 fallback at projects/corestack-datasets/assets/datasets/LULC_v3_river_basin/.
  */
 
 import 'dotenv/config';
@@ -38,13 +34,15 @@ import os from 'os';
 import ee from '@google/earthengine';
 
 const GEE_PROJECT = process.env.GEE_PROJECT || '';
-const INDIASAT_ASSET_FOLDER = 'projects/ee-indiasat/assets/LULC_CombinedOutputs_WithConfidence';
+const INDIASAT_V4_ROOT = 'projects/corestack-trees/assets/LULC_v4';
+const INDIASAT_V3_ROOT = 'projects/corestack-datasets/assets/datasets/LULC_v3_river_basin';
 const INDIASAT_ASSET_TEMPLATE = (process.env.INDIASAT_ASSET_TEMPLATE || '').trim();
 const INDIASAT_LABEL_BAND_OVERRIDE = (process.env.INDIASAT_LABEL_BAND || '').trim();
+// Official palette from CoRE Stack GEE Layers spreadsheet (v4, 14 classes)
 const INDIASAT_PALETTE = [
-  '#000000', '#C4281B', '#5DADE2', '#2E86C1', '#1B4F72',
-  '#E49635', '#1E6E2E', '#A59B8F', '#F4D03F', '#F1C40F',
-  '#D68910', '#7E5109', '#DFC35A',
+  '#000000', '#ff0000', '#74ccf4', '#1ca3ec', '#0f5e9c',
+  '#f1c232', '#38761d', '#A9A9A9', '#BAD93E', '#f59d22',
+  '#FF9371', '#b3561d', '#a9a9a9', '#75fd71',
 ];
 
 function parseArgs(argv) {
@@ -103,9 +101,8 @@ async function resolveAsset(year) {
   const candidates = [];
   if (INDIASAT_ASSET_TEMPLATE) candidates.push(INDIASAT_ASSET_TEMPLATE.replace(/\$\{year\}/g, String(year)));
   candidates.push(
-    `${INDIASAT_ASSET_FOLDER}/${year}`,
-    `${INDIASAT_ASSET_FOLDER}/LULC_${year}`,
-    `${INDIASAT_ASSET_FOLDER}/LULC_${year}_${(year + 1) % 100}`,
+    `${INDIASAT_V4_ROOT}/lulc_v4_${year}_${year + 1}`,
+    `${INDIASAT_V3_ROOT}/pan_india_lulc_v3_${year}_${year + 1}`,
   );
   for (const id of candidates) {
     try {
@@ -130,7 +127,7 @@ async function getMapId(assetId) {
   const img = ee.Image(assetId);
   const bandNames = await new Promise((r, rj) => img.bandNames().evaluate((a, e) => e ? rj(e) : r(a)));
   const label = pickLabelBand(bandNames);
-  const vis = img.select(label).visualize({ min: 0, max: 12, palette: INDIASAT_PALETTE });
+  const vis = img.select(label).visualize({ min: 0, max: 13, palette: INDIASAT_PALETTE });
   return new Promise((r, rj) =>
     vis.getMap({}, (m, e) => e ? rj(new Error(String(e))) : r({ urlFormat: m.urlFormat, mapid: m.mapid, label, bandNames }))
   );

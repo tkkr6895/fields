@@ -265,7 +265,10 @@ export async function exportToGeoJSON(observations: Observation[]): Promise<stri
           acc[`${layerId}_${field}`] = value;
         });
         return acc;
-      }, {} as Record<string, unknown>)
+      }, {} as Record<string, unknown>),
+      ...(obs.predictionValidation ? { predictionValidation: obs.predictionValidation } : {}),
+      ...(obs.fieldData ? { fieldData: obs.fieldData } : {}),
+      ...(obs.weather ? { weather: obs.weather } : {})
     }
   }));
 
@@ -290,7 +293,8 @@ export async function exportToCSV(observations: Observation[]): Promise<string> 
 
   const headers = [
     'id', 'timestamp', 'lat', 'lon', 'accuracy_m',
-    'validation', 'notes', ...Array.from(allFields)
+    'validation', 'notes', ...Array.from(allFields),
+    'predictionValidation', 'fieldData', 'weather'
   ];
 
   const rows = observations.map(obs => {
@@ -309,7 +313,10 @@ export async function exportToCSV(observations: Observation[]): Promise<string> 
       obs.location.accuracy,
       obs.userValidation,
       `"${obs.notes.replace(/"/g, '""')}"`,
-      ...Array.from(allFields).map(f => datasetCols[f] ?? '')
+      ...Array.from(allFields).map(f => datasetCols[f] ?? ''),
+      obs.predictionValidation ? `"${JSON.stringify(obs.predictionValidation).replace(/"/g, '""')}"` : '',
+      obs.fieldData ? `"${JSON.stringify(obs.fieldData).replace(/"/g, '""')}"` : '',
+      obs.weather ? `"${JSON.stringify(obs.weather).replace(/"/g, '""')}"` : ''
     ].join(',');
   });
 

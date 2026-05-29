@@ -2,6 +2,8 @@
   "name": "wg-field-validator",
   "version": "1.0.0",
   "description": "Offline-first field validation PWA for Western Ghats LULC and CoreStack datasets",
+  "repository": "github:tkkr6895/fields",
+  "homepage": "https://github.com/tkkr6895/fields#readme",
   "type": "module",
   "scripts": {
     "dev": "vite",

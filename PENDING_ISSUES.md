@@ -1,82 +1,43 @@
 # Pending issues — first public release (DW + IndiaSAT validator)
 
 This list tracks follow-ups that still require user input or out-of-band
-work. Items previously listed and now resolved in code (legacy strip-
-down, in-app smoke test, etc.) have been dropped. The most recent agent
-pass shipped defensive normalisation, an env-override pathway for
-IndiaSAT band naming, and an offline tile packing script. The hard
-blocker on full GEE introspection (see #1) is the IndiaSAT folder
-sharing.
+work. Items resolved in code are marked ~~strikethrough~~.
+
+Last updated: 2025-07-14
 
 ---
 
-## 1. IndiaSAT GEE asset is not shared with this account
-**Labels:** `access`, `gee`, `indiasat`, `priority:p1`
-`projects/ee-indiasat/assets/LULC_CombinedOutputs_WithConfidence` (and
-every yearly path candidate underneath it) returns
-`does not exist or doesn't allow this operation` for our authenticated
-GEE project `ee-tkkrfirst`. Earth Engine itself authenticates correctly —
-the public Dynamic World asset reads fine — so this is a sharing
-permission, not an auth bug.
+## ~~1. IndiaSAT GEE asset access~~ — RESOLVED
+The old path `projects/ee-indiasat/assets/LULC_CombinedOutputs_WithConfidence`
+was never accessible. The real CoRE Stack v4 data lives at
+`projects/corestack-trees/assets/LULC_v4/lulc_v4_<year>_<year+1>` and
+is fully accessible from GEE project `ee-tkkrfirst`. All 7 years
+(2017–2023) verified with band `predicted_label`.
 
-**What we shipped instead:**
+- `resolveIndiaSATAsset` tries v4 first, then v3 fallback at
+  `projects/corestack-datasets/assets/datasets/LULC_v3_river_basin/`,
+  then env override `INDIASAT_ASSET_TEMPLATE`.
+- 14-class legend (0–13 including Orchard Plantation) with official
+  CoRE Stack palette wired in both server and client.
 
-- `server/dynamicworld-proxy.mjs` now supports operator overrides via
-  env vars so the path can be pinned without code changes once access is
-  granted:
-  - `INDIASAT_ASSET_TEMPLATE` — e.g.
-    `projects/ee-indiasat/assets/LULC_CombinedOutputs_WithConfidence/LULC_${year}`
-  - `INDIASAT_LABEL_BAND` — e.g. `predicted_label`
-  - `INDIASAT_CONF_BAND` — e.g. `confidence`
-- `pickIndiaSATBands` was rewritten with a ranked list of regex patterns
-  (LULC > classification > label/class > category), an explicit
-  two-band fallback (other band = confidence), and a one-time
-  `[IndiaSAT] bandNames=… → label="…" conf="…"` diagnostic log so the
-  first successful round-trip captures the real names without code
-  changes.
-- `resolveIndiaSATAsset` now emits a richer error that distinguishes
-  "no access" from "no asset" and tells the operator which env var to
-  set.
+## ~~2. IndiaSAT confidence band semantics~~ — RESOLVED
+`IndiaSATService.fetchPointData` normalises upstream confidence
+defensively: ≤1 → fraction, ≤100 → percent, ≤255 → 8-bit, else clamped.
+Note: IndiaSAT v4 has only `predicted_label` (no confidence band), so
+confidence will be `null` — this is correctly handled downstream.
 
-**Action (out-of-band):** ask the IndiaSAT / CoRE Stack team
-(core-stack.org / ICTD-IITD) to share read access on
-`projects/ee-indiasat/assets/LULC_CombinedOutputs_WithConfidence/` with
-the GEE project `ee-tkkrfirst` (or whichever project you put in
-`GEE_PROJECT`). Once granted, no code changes are needed — restart the
-proxy and the diagnostic log will surface the real band names.
-
-## 2. ~~IndiaSAT confidence band semantics (0–1 vs 0–100)~~ — DONE
-`IndiaSATService.fetchPointData` now normalises the upstream confidence
-defensively: values ≤ 1 are treated as a 0–1 fraction, ≤ 100 as a
-percent, ≤ 255 as 8-bit scaled, anything else clamped. Downstream
-consumers (PredictionCard, agreement scoring, exports) see a single
-canonical 0–1 number. PredictionCard's display formatter still tolerates
-either scale defensively. Resolved in this pass.
-
-## 3. ~~Offline IndiaSAT tile pack for AOI mode~~ — script ready, gated on #1
-`scripts/pack-indiasat-tiles.mjs` is the new tile-packing job. Given a
-year + bbox + zoom range it auths via the same GEE refresh-token flow
-as the proxy, resolves the asset (honours `INDIASAT_ASSET_TEMPLATE`),
-asks EE for an XYZ urlFormat via `getMap`, walks the tile grid, and
-writes `public/tiles/indiasat/<year>/<z>/<x>/<y>.png` plus a
-`manifest.json`.
-
-`IndiaSATService.getLiveTileUrlTemplate` already prefers
-`/tiles/indiasat/<year>/manifest.json` when one is present, so the
-client switches to cached tiles automatically. The script can be run
-end-to-end as soon as the access blocker in #1 clears.
-
-Example:
+## ~~3. Offline IndiaSAT tile pack~~ — RESOLVED
+`scripts/pack-indiasat-tiles.mjs` uses real v4 asset paths and
+14-class palette. Ready to run:
 
 ```
 node scripts/pack-indiasat-tiles.mjs --year 2022 \
   --bbox 75.0,12.5,76.0,13.5 --minZoom 8 --maxZoom 12
 ```
 
-## 4. Android APK rebuild + Capacitor sync after refactor
+## 4. Android APK rebuild + Capacitor sync
 **Labels:** `android`, `release`, `priority:p1`
-Bottom nav, App shell, services, and types all changed in the
-strip-down + IndiaSAT integration. Re-run:
+Bottom nav, App shell, services, and types all changed. Re-run:
 
 ```
 npm run build
@@ -84,13 +45,10 @@ npx cap sync android
 cd android && ./gradlew assembleDebug
 ```
 
-and refresh the artifact link in `BUILD_APK.md` / `README.md`.
-
 ## 5. Export schema update for new observation fields
 **Labels:** `export`, `priority:p2`
 `Observation` now carries `predictionValidation`, `fieldData`, and
 `weather`. `src/services/ExportService.ts` and
-`src/services/AnnotationExporter.ts` still emit the pre-pivot schema and
-need new columns / mappings so researchers receive the full validation
-payload (per-source agreement, cover composition, dominant species,
-weather). The upcoming Parquet/STAC alignment work depends on this.
+`src/services/AnnotationExporter.ts` need new columns for the full
+validation payload (per-source agreement, cover composition, dominant
+species, weather).

@@ -1,38 +1,40 @@
 /**
  * IndiaSAT LULC Service
  *
- * Point-specific and tile access to the IndiaSAT LULC product hosted on GEE
- * at `projects/ee-indiasat/assets/LULC_CombinedOutputs_WithConfidence/`.
+ * Point-specific and tile access to the IndiaSAT LULC product hosted on GEE.
+ * v4: `projects/corestack-trees/assets/LULC_v4/lulc_v4_<startYear>_<endYear>`
+ * v3 fallback: `projects/corestack-datasets/assets/datasets/LULC_v3_river_basin/pan_india_lulc_v3_<startYear>_<endYear>`
  *
  * The product is described at https://core-stack.org/lulc/ and the IndiaSAT
  * paper (Sahasranaman et al. 2024). It provides annual hydrological-year
- * classifications at 30 m for India, covering the years 2017–2022, with a
- * 13-class hierarchical legend that distinguishes built-up, water seasonality,
- * forest, barren, and cropping-frequency classes.
+ * classifications at 30 m for India, covering the years 2017–2024, with a
+ * 14-class hierarchical legend that distinguishes built-up, water seasonality,
+ * forest, barren, cropping-frequency classes, and orchard plantations (v4).
  *
  * The data is served through the local GEE proxy so the same credential path
  * used for Dynamic World also unlocks IndiaSAT.
  */
 
-export const INDIASAT_CLASSES: Record<number, { name: string; color: string; description: string; group: 'built' | 'water' | 'crops' | 'trees' | 'barren' | 'shrubs' | 'other' }> = {
-  0:  { name: 'Background',                  color: '#000000', group: 'other',  description: 'No-data / masked' },
-  1:  { name: 'Built up',                    color: '#C4281B', group: 'built',  description: 'Settlements, roads, impervious surfaces' },
-  2:  { name: 'Kharif water',                color: '#5DADE2', group: 'water',  description: 'Water present only in the kharif (monsoon) season' },
-  3:  { name: 'Kharif + Rabi water',         color: '#2E86C1', group: 'water',  description: 'Water present in monsoon and winter seasons' },
-  4:  { name: 'Kharif + Rabi + Zaid water',  color: '#1B4F72', group: 'water',  description: 'Perennial water (all three agricultural seasons)' },
-  5:  { name: 'Crops',                       color: '#E49635', group: 'crops',  description: 'Cropland (frequency not resolved)' },
-  6:  { name: 'Trees / Forest',              color: '#1E6E2E', group: 'trees',  description: 'Forest, tree cover, plantations' },
-  7:  { name: 'Barren land',                 color: '#A59B8F', group: 'barren', description: 'Bare rock, wastelands, non-vegetated land' },
-  8:  { name: 'Single Kharif cropping',      color: '#F4D03F', group: 'crops',  description: 'Cultivated once, in the monsoon' },
-  9:  { name: 'Single Non-Kharif cropping',  color: '#F1C40F', group: 'crops',  description: 'Cultivated once, outside monsoon (rabi or zaid)' },
-  10: { name: 'Double cropping',             color: '#D68910', group: 'crops',  description: 'Cultivated twice in a year' },
-  11: { name: 'Triple / Perennial cropping', color: '#7E5109', group: 'crops',  description: 'Cultivated thrice or perennial crops (e.g. sugarcane, orchards)' },
-  12: { name: 'Shrubs / Scrubs',             color: '#DFC35A', group: 'shrubs', description: 'Sparse shrubland and scrub vegetation' },
+export const INDIASAT_CLASSES: Record<number, { name: string; color: string; description: string; group: 'built' | 'water' | 'crops' | 'trees' | 'barren' | 'shrubs' | 'orchard' | 'other' }> = {
+  0:  { name: 'Background',                          color: '#000000', group: 'other',   description: 'No-data / masked' },
+  1:  { name: 'Built up',                            color: '#ff0000', group: 'built',   description: 'Settlements, roads, impervious surfaces' },
+  2:  { name: 'Kharif water',                        color: '#74ccf4', group: 'water',   description: 'Water present only in the kharif (monsoon) season' },
+  3:  { name: 'Kharif and Rabi water',               color: '#1ca3ec', group: 'water',   description: 'Water present in monsoon and winter seasons' },
+  4:  { name: 'Kharif and Rabi and Zaid water',      color: '#0f5e9c', group: 'water',   description: 'Perennial water (all three agricultural seasons)' },
+  5:  { name: 'Crops',                               color: '#f1c232', group: 'crops',   description: 'Cropland (frequency not resolved)' },
+  6:  { name: 'Trees',                               color: '#38761d', group: 'trees',   description: 'Forest, tree cover, plantations' },
+  7:  { name: 'Barren land',                         color: '#A9A9A9', group: 'barren',  description: 'Bare rock, wastelands, non-vegetated land' },
+  8:  { name: 'Single Kharif Cropping',              color: '#BAD93E', group: 'crops',   description: 'Cultivated once, in the monsoon' },
+  9:  { name: 'Single Non-Kharif Cropping',          color: '#f59d22', group: 'crops',   description: 'Cultivated once, outside monsoon (rabi or zaid)' },
+  10: { name: 'Double Cropping',                     color: '#FF9371', group: 'crops',   description: 'Cultivated twice in a year' },
+  11: { name: 'Triple/Annual/Perennial Cropping',    color: '#b3561d', group: 'crops',   description: 'Cultivated thrice or perennial crops (e.g. sugarcane, orchards)' },
+  12: { name: 'Shrubs and Scrubs',                   color: '#a9a9a9', group: 'shrubs',  description: 'Sparse shrubland and scrub vegetation' },
+  13: { name: 'Orchard Plantation',                  color: '#75fd71', group: 'orchard', description: 'Cultivated orchards and plantations (v4)' },
 };
 
-export const INDIASAT_YEARS = [2017, 2018, 2019, 2020, 2021, 2022] as const;
+export const INDIASAT_YEARS = [2017, 2018, 2019, 2020, 2021, 2022, 2023] as const;
 export type IndiaSATYear = typeof INDIASAT_YEARS[number];
-export const LATEST_INDIASAT_YEAR: IndiaSATYear = 2022;
+export const LATEST_INDIASAT_YEAR: IndiaSATYear = 2023;
 
 export interface IndiaSATPointResult {
   lat: number;

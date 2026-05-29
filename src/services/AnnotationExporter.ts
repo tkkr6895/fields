@@ -196,6 +196,10 @@ class AnnotationExporter {
           'fields:confidence': obs.confidence ?? null,
           'fields:season': obs.season ?? null,
           'fields:sync_status': obs.syncStatus ?? 'pending',
+          // v3 — prediction validation, field data, weather
+          ...(obs.predictionValidation ? { 'fields:prediction_validation': obs.predictionValidation } : {}),
+          ...(obs.fieldData ? { 'fields:field_data': obs.fieldData } : {}),
+          ...(obs.weather ? { 'fields:weather': obs.weather } : {}),
           // Vector feature context (for ground-truthing vector datasets)
           ...(obs.vectorFeatureContext ? {
             'fields:vector_layer_id': obs.vectorFeatureContext.layerId,

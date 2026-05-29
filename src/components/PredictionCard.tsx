@@ -142,7 +142,7 @@ const PredictionCard: React.FC<PredictionCardProps> = ({ focusLocation, isOnline
         <div className="prediction-card__years">
           <label>IndiaSAT</label>
           <select value={indiasatYear} onChange={(e) => handleYear(Number(e.target.value) as IndiaSATYear)}>
-            {INDIASAT_YEARS.map(y => <option key={y} value={y}>{y}</option>)}
+            {INDIASAT_YEARS.map(y => <option key={y} value={y}>{y}–{y + 1}</option>)}
           </select>
         </div>
       </div>

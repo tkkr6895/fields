@@ -46,49 +46,54 @@ const DW_PALETTE = [
   '#B39FE1'  // Snow
 ];
 
-// IndiaSAT LULC classes (core-stack.org IndiaSAT pipeline)
-// Asset: projects/ee-indiasat/assets/LULC_CombinedOutputs_WithConfidence/
-// Hydrological years 2017-2022, 30m resolution, annual.
+// IndiaSAT v4 LULC classes (core-stack.org IndiaSAT pipeline)
+// Source: CoRE Stack GEE Layers spreadsheet
+// Asset root: projects/corestack-trees/assets/LULC_v4/
+// Pattern: lulc_v4_<startYear>_<endYear> (hydrological years, 30m, annual)
+// Band: predicted_label (single band, integer 0-13)
 const INDIASAT_CLASS_NAMES = {
   0: 'Background',
   1: 'Built up',
   2: 'Kharif water',
-  3: 'Kharif + Rabi water',
-  4: 'Kharif + Rabi + Zaid water',
+  3: 'Kharif and Rabi water',
+  4: 'Kharif and Rabi and Zaid water',
   5: 'Crops',
-  6: 'Trees / Forest',
+  6: 'Trees',
   7: 'Barren land',
-  8: 'Single Kharif cropping',
-  9: 'Single Non-Kharif cropping',
-  10: 'Double cropping',
-  11: 'Triple / Perennial cropping',
-  12: 'Shrubs / Scrubs'
+  8: 'Single Kharif Cropping',
+  9: 'Single Non-Kharif Cropping',
+  10: 'Double Cropping',
+  11: 'Triple/Annual/Perennial Cropping',
+  12: 'Shrubs and Scrubs',
+  13: 'Orchard Plantation'
 };
-// Palette inspired by IndiaSAT visualisation conventions (built-red, water-blues, vegetation-greens, crop-ambers).
+// Official palette from CoRE Stack GEE Layers spreadsheet (v4)
 const INDIASAT_PALETTE = [
-  '#000000', // 0  Background (transparent in viz)
-  '#C4281B', // 1  Built up
-  '#5DADE2', // 2  Kharif water
-  '#2E86C1', // 3  Kharif + Rabi water
-  '#1B4F72', // 4  Perennial water
-  '#E49635', // 5  Crops (generic)
-  '#1E6E2E', // 6  Trees / Forest
-  '#A59B8F', // 7  Barren land
-  '#F4D03F', // 8  Single Kharif
-  '#F1C40F', // 9  Single Non-Kharif
-  '#D68910', // 10 Double cropping
-  '#7E5109', // 11 Triple / Perennial cropping
-  '#DFC35A'  // 12 Shrubs / Scrubs
+  '#000000', // 0  Background
+  '#ff0000', // 1  Built up
+  '#74ccf4', // 2  Kharif water
+  '#1ca3ec', // 3  Kharif + Rabi water
+  '#0f5e9c', // 4  Perennial water
+  '#f1c232', // 5  Crops
+  '#38761d', // 6  Trees
+  '#A9A9A9', // 7  Barren land
+  '#BAD93E', // 8  Single Kharif Cropping
+  '#f59d22', // 9  Single Non-Kharif Cropping
+  '#FF9371', // 10 Double Cropping
+  '#b3561d', // 11 Triple/Annual/Perennial Cropping
+  '#a9a9a9', // 12 Shrubs and Scrubs
+  '#75fd71'  // 13 Orchard Plantation
 ];
-const INDIASAT_ASSET_FOLDER = 'projects/ee-indiasat/assets/LULC_CombinedOutputs_WithConfidence';
-const INDIASAT_YEARS = [2017, 2018, 2019, 2020, 2021, 2022];
+// Primary asset root (v4, verified accessible from ee-tkkrfirst)
+const INDIASAT_V4_ROOT = 'projects/corestack-trees/assets/LULC_v4';
+// Fallback v3 root
+const INDIASAT_V3_ROOT = 'projects/corestack-datasets/assets/datasets/LULC_v3_river_basin';
+// Legacy asset folder kept for env-override compatibility
+const INDIASAT_ASSET_FOLDER = INDIASAT_V4_ROOT;
+const INDIASAT_YEARS = [2017, 2018, 2019, 2020, 2021, 2022, 2023];
 
-// Optional operator overrides — if the IndiaSAT folder is granted to your
-// project later (or if you have your own mirror), you can pin the exact path
-// + band names without changing code. See PENDING_ISSUES.md issue #14.
-//   INDIASAT_ASSET_TEMPLATE  e.g. "projects/ee-indiasat/assets/LULC_CombinedOutputs_WithConfidence/LULC_${year}"
-//   INDIASAT_LABEL_BAND      e.g. "predicted_label"
-//   INDIASAT_CONF_BAND       e.g. "confidence"
+// Optional operator overrides via env vars. Normally not needed since the
+// v4 + v3 paths are now hard-coded from the CoRE Stack GEE Layers spreadsheet.
 const INDIASAT_ASSET_TEMPLATE = (process.env.INDIASAT_ASSET_TEMPLATE || '').trim();
 const INDIASAT_LABEL_BAND_OVERRIDE = (process.env.INDIASAT_LABEL_BAND || '').trim();
 const INDIASAT_CONF_BAND_OVERRIDE = (process.env.INDIASAT_CONF_BAND || '').trim();
@@ -100,21 +105,16 @@ const indiasatBandCache = new Map();
 
 async function resolveIndiaSATAsset(year) {
   if (indiasatYearAssetCache.has(year)) return indiasatYearAssetCache.get(year);
-  // If operator pinned a template, honour it first.
+  const nextYr = String((year + 1) % 100).padStart(2, '0');
+  // Build candidate list: operator override → v4 → v3 → legacy fallbacks.
   const candidates = [];
   if (INDIASAT_ASSET_TEMPLATE) {
     candidates.push(INDIASAT_ASSET_TEMPLATE.replace(/\$\{year\}/g, String(year)));
   }
-  // Common naming conventions seen in CoRE Stack docs + IndiaSAT scripts.
-  candidates.push(
-    `${INDIASAT_ASSET_FOLDER}/${year}`,
-    `${INDIASAT_ASSET_FOLDER}/LULC_${year}`,
-    `${INDIASAT_ASSET_FOLDER}/lulc_${year}`,
-    `${INDIASAT_ASSET_FOLDER}/India_${year}`,
-    `${INDIASAT_ASSET_FOLDER}/${year}_LULC`,
-    `${INDIASAT_ASSET_FOLDER}/LULC_${year}_${(year + 1) % 100}`,  // e.g. LULC_2022_23
-    `${INDIASAT_ASSET_FOLDER}/${year}_${(year + 1) % 100}`,        // e.g. 2022_23
-  );
+  // v4 (confirmed accessible): projects/corestack-trees/assets/LULC_v4/lulc_v4_<year>_<nextYear>
+  candidates.push(`${INDIASAT_V4_ROOT}/lulc_v4_${year}_${year + 1}`);
+  // v3 fallback: projects/corestack-datasets/assets/datasets/LULC_v3_river_basin/pan_india_lulc_v3_<year>_<nextYear>
+  candidates.push(`${INDIASAT_V3_ROOT}/pan_india_lulc_v3_${year}_${year + 1}`);
   let lastErr = null;
   for (const id of candidates) {
     try {
@@ -557,7 +557,7 @@ app.get('/indiasat/meta', (_req, res) => {
     palette: INDIASAT_PALETTE,
     resolution_m: 30,
     temporal: 'annual (hydrological year)',
-    citation: 'Sahasranaman et al. (2024). IndiaSAT LULC, projects/ee-indiasat. https://core-stack.org/lulc/'
+    citation: 'IndiaSAT v4 LULC (CoRE Stack, ICTD-IITD). https://core-stack.org/lulc/'
   });
 });
 
@@ -634,7 +634,7 @@ app.get('/indiasat/mapid', async (req, res) => {
       image.bandNames().getInfo((n, e) => (e ? reject(e) : resolve(n)))
     );
     const { labelBand } = pickIndiaSATBands(bandNames);
-    const vis = image.select(labelBand).visualize({ min: 0, max: 12, palette: INDIASAT_PALETTE });
+    const vis = image.select(labelBand).visualize({ min: 0, max: 13, palette: INDIASAT_PALETTE });
     vis.getMap({}, (map, err) => {
       if (err) return res.status(500).json({ error: String(err) });
       res.json({

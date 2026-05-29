@@ -196,6 +196,14 @@ const PredictionCard: React.FC<PredictionCardProps> = ({ focusLocation, isOnline
             {INDIASAT_YEARS.map(y => <option key={y} value={y}>{y}–{y + 1}</option>)}
           </select>
         </div>
+        <button
+          className="prediction-card__collapse-btn"
+          onClick={() => setExpanded(e => !e)}
+          aria-label={expanded ? 'Collapse card' : 'Expand card'}
+          title={expanded ? 'Collapse' : 'Expand'}
+        >
+          {expanded ? '▾' : '▸'}
+        </button>
       </div>
 
       {expanded && (
@@ -217,6 +225,10 @@ const PredictionCard: React.FC<PredictionCardProps> = ({ focusLocation, isOnline
               {snapshot ? `Pulled ${new Date(snapshot.fetchedAt).toLocaleTimeString()}` : 'Waiting for predictions…'}
             </small>
           </div>
+
+          <button className="prediction-card__dismiss" onClick={() => setExpanded(false)}>
+            Collapse ▴
+          </button>
         </>
       )}
     </div>

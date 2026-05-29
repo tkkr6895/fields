@@ -337,6 +337,13 @@ const ValidationCapture: React.FC<ValidationCaptureProps> = ({ focusLocation, sn
             <span className={step >= 2 ? 'active' : ''}>2 · Photo &amp; ground</span>
             <span className={step >= 3 ? 'active' : ''}>3 · Notes</span>
           </div>
+          {snapshot && (
+            <div className="vc-enrichment-badge">
+              {snapshot.results.dynamicworld && <span title="Dynamic World prediction attached">🌍 DW</span>}
+              {snapshot.results.indiasat && <span title="IndiaSAT prediction attached">🛰 IndiaSAT</span>}
+              <small>auto-attached</small>
+            </div>
+          )}
         </header>
 
         <main className="vc-body">

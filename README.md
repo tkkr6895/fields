@@ -18,6 +18,16 @@ Field Validator enables practitioners, researchers, and community workers to col
 
 - **Cross-Platform Deployment**: Runs as a Progressive Web App (PWA) in any modern browser, or as a native Android application via Capacitor.
 
+## Screenshots
+
+| Map View | Prediction Card | Overlays Panel |
+|----------|----------------|----------------|
+| ![Map](test_screens/01_map_view.png) | ![Predictions](test_screens/02_prediction_card.png) | ![Overlays](test_screens/04_overlays_panel.png) |
+
+| All Classes | Validation Wizard | Field Log |
+|-------------|-------------------|-----------|
+| ![Classes](test_screens/03_all_classes_expanded.png) | ![Validate](test_screens/05_validation_wizard.png) | ![Log](test_screens/07_log_panel.png) |
+
 ## Architecture
 
 The application is built with:

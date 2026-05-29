@@ -55,6 +55,11 @@ grid-gen-log.txt
 # Claude temp files
 tmpclaude-*
 
+# Machine-specific files
+*-IN-5CG*.md
+*-IN-5CG*.tsx
+IN-5CG*.gitignore
+
 # Python virtual environment
 .venv/
 

@@ -181,7 +181,7 @@ export interface Observation {
 export interface PredictionValidationRecord {
   capturedAt: string;
   perSource: Array<{
-    source: 'dynamicworld' | 'indiasat' | 'tessera';
+    source: 'indiasat';
     classId: number;
     className: string;
     classColor: string;

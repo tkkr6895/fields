@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
-import { dynamicWorldService } from '../services/DynamicWorldService';
+import React, { useState, useEffect, useRef } from 'react';
 import { db } from '../db/database';
+import { customLayerManager } from '../services/CustomLayerManager';
 import {
   getDeviceId,
   getUserName,
@@ -13,8 +13,6 @@ import {
 import {
   getCoreStackApiKey,
   setCoreStackApiKey,
-  getGeeProxyUrl,
-  setGeeProxyUrl,
   getTesseraProxyUrl,
   setTesseraProxyUrl,
 } from '../services/AppConfig';
@@ -24,10 +22,15 @@ declare const __APP_VERSION__: string;
 
 interface SettingsPanelProps {
   onClose: () => void;
+  onFlyTo?: (lon: number, lat: number, zoom?: number) => void;
+  onAoiImported?: () => void;
 }
 
-const SettingsPanel: React.FC<SettingsPanelProps> = ({ onClose }) => {
-  const [dwStatus, setDwStatus] = useState<{ mode: string; message: string; coverage?: string }>({ mode: 'loading', message: 'Checking...' });
+const SettingsPanel: React.FC<SettingsPanelProps> = ({ onClose, onFlyTo, onAoiImported }) => {
+  const [placeQuery, setPlaceQuery] = useState('');
+  const [placeStatus, setPlaceStatus] = useState<string | null>(null);
+  const [aoiStatus, setAoiStatus] = useState<string | null>(null);
+  const aoiInput = useRef<HTMLInputElement>(null);
 
   // User Identity (Task 1.9.2)
   const [displayName, setDisplayName] = useState('');
@@ -60,19 +63,10 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ onClose }) => {
   );
   const [mapPrefsSaved, setMapPrefsSaved] = useState(false);
   const [coreKey, setCoreKey] = useState(getCoreStackApiKey());
-  const [geeUrl, setGeeUrl] = useState(getGeeProxyUrl() || '');
   const [tesseraUrl, setTesseraUrl] = useState(getTesseraProxyUrl() || '');
   const [connSaved, setConnSaved] = useState(false);
 
   useEffect(() => {
-    // Check DW status
-    const checkDwStatus = async () => {
-      await dynamicWorldService.loadOfflineData();
-      setDwStatus(dynamicWorldService.getDataSourceStatus());
-    };
-    checkDwStatus();
-
-    // Load user identity
     setDisplayName(getUserName() || '');
     setAffiliation(getUserAffiliation() || '');
 
@@ -137,6 +131,40 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ onClose }) => {
       alert('Error clearing data. See console for details.');
     } finally {
       setClearingData(false);
+    }
+  };
+
+  const handleGoToPlace = async () => {
+    const q = placeQuery.trim();
+    if (!q) return;
+    setPlaceStatus('Searching…');
+    try {
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&q=${encodeURIComponent(q)}`,
+        { headers: { Accept: 'application/json' } }
+      );
+      const rows = await res.json() as Array<{ lat: string; lon: string; display_name: string }>;
+      if (!rows[0]) {
+        setPlaceStatus('No match. Try a village, taluk, or lat,lon.');
+        return;
+      }
+      onFlyTo?.(Number(rows[0].lon), Number(rows[0].lat), 13);
+      setPlaceStatus(rows[0].display_name);
+    } catch {
+      setPlaceStatus('Search needs internet.');
+    }
+  };
+
+  const handleAoiFile = async (file: File | undefined) => {
+    if (!file) return;
+    setAoiStatus('Importing…');
+    try {
+      const result = await customLayerManager.importFile(file, { title: file.name.replace(/\.[^.]+$/, '') });
+      const warn = result.warnings.length ? ` (${result.warnings[0]})` : '';
+      setAoiStatus(`Loaded ${result.layer.title} — ${result.layer.featureCount} features${warn}`);
+      onAoiImported?.();
+    } catch (e) {
+      setAoiStatus(e instanceof Error ? e.message : 'Could not import that file.');
     }
   };
 
@@ -291,9 +319,41 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ onClose }) => {
           </div>
 
           <div className="settings-section">
+            <h3>Before you go out</h3>
+            <p className="settings-description">
+              No portal needed. Search a place, or import the polygons you already have (GeoJSON, KML/KMZ, CSV with lat/lon). They stay on this phone and draw on the map.
+            </p>
+            <label style={{ color: '#aaa', fontSize: 12, display: 'block', marginBottom: 4 }}>Go to a place</label>
+            <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
+              <input
+                value={placeQuery}
+                onChange={(e) => setPlaceQuery(e.target.value)}
+                placeholder="Sulya, Karnataka"
+                className="settings-input"
+                style={{ flex: 1 }}
+                onKeyDown={(e) => { if (e.key === 'Enter') void handleGoToPlace(); }}
+              />
+              <button type="button" className="settings-btn primary" onClick={() => void handleGoToPlace()}>Go</button>
+            </div>
+            {placeStatus && <p className="settings-description">{placeStatus}</p>}
+            <label style={{ color: '#aaa', fontSize: 12, display: 'block', marginBottom: 4 }}>Import area of interest</label>
+            <input
+              ref={aoiInput}
+              type="file"
+              accept=".geojson,.json,.kml,.kmz,.csv,.tsv,.gpkg"
+              style={{ display: 'none' }}
+              onChange={(e) => { void handleAoiFile(e.target.files?.[0]); e.target.value = ''; }}
+            />
+            <button type="button" className="settings-btn primary" onClick={() => aoiInput.current?.click()}>
+              Choose GeoJSON / KML / CSV
+            </button>
+            {aoiStatus && <p className="settings-description" style={{ marginTop: 8 }}>{aoiStatus}</p>}
+          </div>
+
+          <div className="settings-section">
             <h3>Keys & live maps</h3>
             <p className="settings-description">
-              Stored only on this phone. Needed so live Dynamic World / IndiaSAT colouring and CoRE Stack maps work in the installed app.
+              Stored only on this phone. CoRE Stack paints IndiaSAT land cover for the tehsil you are in. Tessera proxy is optional.
             </p>
             <label style={{ color: '#aaa', fontSize: 12, display: 'block', marginBottom: 4 }}>CoRE Stack API key</label>
             <input
@@ -301,15 +361,6 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ onClose }) => {
               value={coreKey}
               onChange={(e) => setCoreKey(e.target.value)}
               placeholder="from core-stack.org/use-apis"
-              className="settings-input"
-              style={{ width: '100%', marginBottom: 10, boxSizing: 'border-box' }}
-            />
-            <label style={{ color: '#aaa', fontSize: 12, display: 'block', marginBottom: 4 }}>Earth Engine proxy URL</label>
-            <input
-              type="url"
-              value={geeUrl}
-              onChange={(e) => setGeeUrl(e.target.value)}
-              placeholder="https://your-gee-proxy.example.com"
               className="settings-input"
               style={{ width: '100%', marginBottom: 10, boxSizing: 'border-box' }}
             />
@@ -325,7 +376,6 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ onClose }) => {
             <button
               onClick={() => {
                 setCoreStackApiKey(coreKey);
-                setGeeProxyUrl(geeUrl);
                 setTesseraProxyUrl(tesseraUrl);
                 setConnSaved(true);
                 setTimeout(() => setConnSaved(false), 2000);
@@ -335,42 +385,6 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ onClose }) => {
               Save connections
             </button>
             {connSaved && <span className="settings-saved"> Saved</span>}
-          </div>
-
-          {/* Dynamic World Status */}
-          <div className="settings-section">
-            <h3>🗺️ Dynamic World Land Cover</h3>
-            <p className="settings-description">
-              Point-specific land cover data from Google Earth Engine.
-            </p>
-            <div className="settings-status-box">
-              <div className="status-row">
-                <span className="status-label">Mode:</span>
-                <span className={`status-value ${dwStatus.mode}`}>
-                  {dwStatus.mode === 'live' && '🟢 Live (GEE Proxy)'}
-                  {dwStatus.mode === 'offline' && '🟡 Offline Grid'}
-                  {dwStatus.mode === 'unavailable' && '🔴 Not Available'}
-                  {dwStatus.mode === 'loading' && '⏳ Loading...'}
-                </span>
-              </div>
-              <div className="status-row">
-                <span className="status-label">Info:</span>
-                <span className="status-value">{dwStatus.message}</span>
-              </div>
-              {dwStatus.coverage && (
-                <div className="status-row">
-                  <span className="status-label">Coverage:</span>
-                  <span className="status-value">{dwStatus.coverage}</span>
-                </div>
-              )}
-            </div>
-            <div className="settings-help">
-              <strong>Setup options:</strong>
-              <ol>
-                <li><strong>Live mode:</strong> Run <code>npm run dev:dw-proxy</code> with GEE credentials</li>
-                <li><strong>Offline mode:</strong> Generate grid with <code>python scripts/generate-dw-grid.py</code></li>
-              </ol>
-            </div>
           </div>
 
           {/* Storage Usage (Task 1.10.1) */}

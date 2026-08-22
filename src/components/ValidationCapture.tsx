@@ -11,12 +11,10 @@ import { deriveSeason } from '../services/SeasonService';
 import { getDeviceId, getUserName } from '../services/DeviceService';
 import { gbifService, type GBIFSpeciesSuggestion } from '../services/GBIFService';
 import {
-  PREDICTION_SOURCES,
   type PredictionSnapshot,
   type PredictionResult,
   type PredictionSourceId,
 } from '../services/PredictionService';
-import { DW_CLASSES } from '../services/DynamicWorldService';
 import { INDIASAT_CLASSES } from '../services/IndiaSATService';
 import type {
   LocationData,
@@ -41,10 +39,7 @@ interface PerSourceState {
   observerClassName?: string;
 }
 
-const listClasses = (source: PredictionSourceId): Array<{ id: number; name: string; color: string }> => {
-  if (source === 'dynamicworld') {
-    return Object.entries(DW_CLASSES).map(([id, info]) => ({ id: Number(id), name: info.name, color: info.color }));
-  }
+const listClasses = (_source: PredictionSourceId): Array<{ id: number; name: string; color: string }> => {
   return Object.entries(INDIASAT_CLASSES).map(([id, info]) => ({ id: Number(id), name: info.name, color: info.color }));
 };
 
@@ -69,9 +64,8 @@ const ABUNDANCE_LEVELS: { key: AbundanceLevel; label: string; percent: number }[
 
 const ValidationCapture: React.FC<ValidationCaptureProps> = ({ focusLocation, snapshot, onSubmit, onClose }) => {
   const [step, setStep] = useState<1 | 2>(1);
-  const sources = useMemo<PredictionSourceId[]>(() => ['dynamicworld', 'indiasat'], []);
+  const sources = useMemo<PredictionSourceId[]>(() => ['indiasat'], []);
   const [perSource, setPerSource] = useState<Record<PredictionSourceId, PerSourceState>>({
-    dynamicworld: { agreement: 'unrated' },
     indiasat: { agreement: 'unrated' },
   });
   const [location, setLocation] = useState<LocationData | null>(focusLocation);
@@ -248,7 +242,6 @@ const ValidationCapture: React.FC<ValidationCaptureProps> = ({ focusLocation, sn
         synced: false,
         syncStatus: 'pending',
         enrichmentSources: [
-          ...(snapshot?.results.dynamicworld ? ['dynamicworld'] : []),
           ...(snapshot?.results.indiasat ? ['indiasat'] : []),
           ...(tessera ? ['tessera'] : []),
           ...(weather ? ['weather'] : []),
@@ -476,13 +469,12 @@ const ValidationCapture: React.FC<ValidationCaptureProps> = ({ focusLocation, sn
                 </div>
               )}
               {sources.map(src => {
-                const meta = PREDICTION_SOURCES[src];
                 const r = snapshot?.results[src];
                 const s = perSource[src];
                 return (
                   <div key={src} className="vc-source">
                     <div className="vc-source__title">
-                      <strong>{meta.shortTitle === 'Dynamic World' ? 'Live satellite cover' : 'India land cover (CoRE)'}</strong>
+                      <strong>India land cover (CoRE)</strong>
                       <small>{r?.asOf ?? '—'}</small>
                     </div>
                     <div className="vc-source__pred">

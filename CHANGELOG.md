@@ -4,6 +4,15 @@ All notable changes to the Fields app are documented in this file.
 
 ---
 
+## [1.2.0] — 2026-08-22: IndiaSAT-only maps, photo-first trees
+
+- **Removed Google Earth Engine / Dynamic World.** Land cover is IndiaSAT via CoRE Stack GeoServer (WMS tiles + GetFeatureInfo).
+- **Photo-first capture:** + opens the camera immediately; save is local. IndiaSAT, weather, CoRE admin, GBIF attach in SyncEngine when online.
+- **AOIs without a portal:** Settings search (Nominatim) + GeoJSON/KML/CSV import drawn on the map.
+- Tessera tile ids still stored on every note.
+
+---
+
 ## [1.1.0] — 2026-08-22: Field-ready Tessera + CoRE Stack notes
 
 Ground-first capture for people who are not GIS users. Load Dynamic World, IndiaSAT (CoRE Stack LULC), and CoRE Stack tehsil maps; record land cover, tree type, and notes that join to Tessera tiles.

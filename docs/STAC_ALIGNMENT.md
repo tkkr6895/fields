@@ -1,5 +1,9 @@
 # CoreStack STAC Spec Alignment
 
+> **v1.2:** live land cover is IndiaSAT via CoRE GeoServer, not a local CoreStack GeoJSON pack. STAC export still comes from `AnnotationExporter`.
+
+How data captured and exported by Fields aligns with the [STAC v1.0.0](https://stacspec.org/) specification.
+
 How data captured and exported by the WG Field Validator aligns with the [STAC v1.0.0](https://stacspec.org/) specification and CoreStack's data model.
 
 ---

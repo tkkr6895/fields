@@ -296,7 +296,6 @@ export async function exportToCSV(observations: Observation[]): Promise<string> 
   const headers = [
     'id', 'timestamp', 'lat', 'lon', 'accuracy_m', 'altitude_m',
     'observation_type', 'validation', 'notes', 'confidence', 'season',
-    'dw_class', 'dw_confidence', 'dw_agreement', 'dw_observer_class',
     'indiasat_class', 'indiasat_confidence', 'indiasat_agreement', 'indiasat_observer_class',
     'tessera_tile_id', 'tessera_year', 'tessera_coverage',
     'cover_tree_pct', 'cover_shrub_pct', 'cover_grass_pct', 'cover_crop_pct',
@@ -320,7 +319,6 @@ export async function exportToCSV(observations: Observation[]): Promise<string> 
         datasetCols[`${layerId}_${field}`] = String(value ?? '');
       });
     });
-    const dw = srcVal(obs, 'dynamicworld');
     const sat = srcVal(obs, 'indiasat');
     const csvEscape = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
 
@@ -336,10 +334,6 @@ export async function exportToCSV(observations: Observation[]): Promise<string> 
       csvEscape(obs.notes),
       obs.confidence ?? '',
       obs.season || '',
-      dw?.className ?? '',
-      dw?.confidence ?? '',
-      dw?.agreement ?? '',
-      dw?.observerClassName ?? '',
       sat?.className ?? '',
       sat?.confidence ?? '',
       sat?.agreement ?? '',

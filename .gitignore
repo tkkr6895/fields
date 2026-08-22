@@ -29,11 +29,9 @@ ios/
 google-services.json
 GoogleService-Info.plist
 
-# API keys and secrets
-**/secrets/
-**/credentials/
-corestack_api_key.txt
-gee_credentials.json
+creds/
+**/Core Stack API.rtf
+vite.config.ts.timestamp-*.mjs
 
 # IDE
 .vscode/

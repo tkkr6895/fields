@@ -1,3 +1,7 @@
+# Database
+
+Dexie / IndexedDB in `src/db/database.ts`: `observations`, `images`, `customLayers` (AOIs), `syncQueue`, `exportLog`, `species`. CSV export columns are IndiaSAT + Tessera + CoRE admin (no `dw_*`).
+
 # Field Validator - Database Reference
 
 > Complete documentation of IndexedDB schema, queries, and data management

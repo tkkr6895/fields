@@ -3,7 +3,6 @@
 // Extend Vite's env typing for app-specific variables.
 interface ImportMetaEnv {
   readonly VITE_CORESTACK_API_KEY?: string;
-  readonly VITE_DW_GEE_PROXY_URL?: string;
   readonly VITE_TESSERA_PROXY_URL?: string;
 }
 

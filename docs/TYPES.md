@@ -1,3 +1,7 @@
+# Types
+
+Canonical definitions: `src/types/index.ts`. **v1.2:** `predictionValidation.perSource.source` is `'indiasat'` only (no Dynamic World). Tessera and CoRE live on `Observation.tessera` / `Observation.coreStack`.
+
 # Field Validator - TypeScript Types Reference
 
 > Complete reference for all TypeScript interfaces and type definitions

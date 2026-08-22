@@ -2,15 +2,15 @@
  * SyncEngine — Unified offline-first enrichment service (Tasks 1.4.1–1.4.4)
  *
  * Replaces the inline sync logic in FieldLog.tsx and the legacy SyncService.ts.
- * Enriches observations with Weather (Open-Meteo), Dynamic World (GEE), and
- * CoreStack data, with persistent queue, retry logic, and offline pause.
+ * Enriches observations with Weather, IndiaSAT (CoRE Stack), admin names, GBIF, Tessera.
  */
 
 import { db, dbReady, enqueueSyncItem, dequeueSyncItems, updateSyncQueueItem, purgeSyncQueue, getSyncQueueStats } from '../db/database';
 import { weatherService } from './WeatherService';
-import { dynamicWorldService } from './DynamicWorldService';
+import { indiaSatService, INDIASAT_CLASSES, LATEST_INDIASAT_YEAR } from './IndiaSATService';
 import { tesseraService } from './TesseraService';
 import { coreStackService } from './CoreStackService';
+import { gbifService } from './GBIFService';
 import type { SyncQueueItem, DatasetValues } from '../types';
 
 // ─── Public types ──────────────────────────────────────────────────
@@ -85,13 +85,15 @@ class SyncEngine {
     await enqueueSyncItem(observationId);
     const stats = await getSyncQueueStats();
     this.setStatus({ queueSize: (stats['pending'] || 0) + (stats['processing'] || 0) });
+    if (this.status.isOnline) {
+      void this.processQueue();
+    }
   }
 
   // ─── 1.4.1 enrichObservation ─────────────────────────────────────
 
   /**
-   * Enrich a single observation with Weather, Dynamic World, and CoreStack.
-   * Updates the database record in place.
+   * Enrich a single observation with weather, IndiaSAT, CoRE admin, GBIF, Tessera.
    */
   async enrichObservation(observationId: string): Promise<void> {
     const ready = await dbReady;
@@ -120,28 +122,54 @@ class SyncEngine {
       console.warn('[SyncEngine] Weather enrichment failed:', e);
     }
 
-    // 2. Dynamic World (GEE / offline grid)
+    // 2. IndiaSAT LULC via CoRE Stack GeoServer (no Earth Engine)
     try {
-      await dynamicWorldService.loadOfflineData();
-      const pointData = await dynamicWorldService.fetchPointData(lat, lon);
+      const pointData = await indiaSatService.fetchPointData(lat, lon, LATEST_INDIASAT_YEAR);
       if (pointData) {
-        enrichedData['dw_data_type'] = 'POINT';
-        enrichedData['dw_source'] = pointData.source === 'live' ? 'Dynamic World (GEE Live)' : 'Dynamic World (Offline Grid)';
-        enrichedData['dw_timestamp'] = pointData.timestamp;
-        enrichedData['dw_class'] = pointData.landCoverClass;
-        enrichedData['dw_class_id'] = pointData.landCoverClassId;
-        enrichedData['dw_confidence'] = pointData.confidence;
-        enrichedData['dw_resolution'] = pointData.resolution;
-        enrichedData['dw_probabilities'] = pointData.probabilities;
-        sources.push('dynamicworld');
+        enrichedData['indiasat_data_type'] = 'POINT';
+        enrichedData['indiasat_source'] = 'IndiaSAT / CoRE Stack WMS';
+        enrichedData['indiasat_timestamp'] = pointData.timestamp;
+        enrichedData['indiasat_class'] = pointData.landCoverClass;
+        enrichedData['indiasat_class_id'] = pointData.classId;
+        enrichedData['indiasat_year'] = pointData.year;
+        enrichedData['indiasat_resolution'] = pointData.resolution;
+        sources.push('indiasat');
+        const prev = obs.predictionValidation?.perSource.find(s => s.source === 'indiasat');
+        await db.observations.update(observationId, {
+          predictionValidation: {
+            capturedAt: obs.predictionValidation?.capturedAt || pointData.timestamp,
+            perSource: [{
+              source: 'indiasat',
+              classId: pointData.classId,
+              className: pointData.landCoverClass,
+              classColor: INDIASAT_CLASSES[pointData.classId]?.color ?? '#888',
+              confidence: pointData.confidence,
+              asOf: String(pointData.year),
+              live: true,
+              agreement: prev?.agreement ?? 'unrated',
+              observerClassId: prev?.observerClassId,
+              observerClassName: prev?.observerClassName,
+            }],
+          },
+        });
       } else {
-        enrichedData['dw_data_type'] = 'UNAVAILABLE';
-        enrichedData['dw_note'] = 'Location outside Dynamic World coverage or data not available';
+        enrichedData['indiasat_data_type'] = 'UNAVAILABLE';
+        enrichedData['indiasat_note'] = 'No IndiaSAT layer for this tehsil yet';
       }
     } catch (e) {
-      console.warn('[SyncEngine] Dynamic World enrichment failed:', e);
-      enrichedData['dw_data_type'] = 'ERROR';
-      enrichedData['dw_note'] = e instanceof Error ? e.message : 'Failed to fetch land cover';
+      console.warn('[SyncEngine] IndiaSAT enrichment failed:', e);
+      enrichedData['indiasat_data_type'] = 'ERROR';
+      enrichedData['indiasat_note'] = e instanceof Error ? e.message : 'Failed to fetch land cover';
+    }
+
+    try {
+      const nearby = await gbifService.getSuggestionsNearby({ lat, lon, kingdom: 'Plantae', radiusKm: 8, limit: 8 });
+      if (nearby.length) {
+        enrichedData['gbif_nearby'] = nearby.slice(0, 8).map(s => s.scientificName).join('; ');
+        sources.push('gbif');
+      }
+    } catch (e) {
+      console.warn('[SyncEngine] GBIF enrichment failed:', e);
     }
 
     try {
@@ -171,7 +199,6 @@ class SyncEngine {
             tehsil: core.admin.tehsil,
             block: core.admin.block,
             layerNames: core.layers.map(l => l.name),
-            kyl: core.kyl,
           },
         });
       }

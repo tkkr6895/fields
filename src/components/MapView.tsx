@@ -1,10 +1,6 @@
 /**
- * MapView — slim raster-XYZ + location renderer for the LULC validator.
- * Renders the active basemap, the IndiaSAT / Dynamic World overlays passed
- * in via the `layers` prop, the user's GPS marker, and reports clicks
- * back to App.tsx. No CoreStack, GeoJSON, or image-overlay handling
- * (intentionally removed to keep the surface area small and the
- * dependencies credible).
+ * MapView — satellite/dark basemap, IndiaSAT/CoRE WMS tiles, imported AOIs,
+ * GPS, and field-note markers.
  */
 import {
   useEffect,
@@ -15,10 +11,17 @@ import {
 } from 'react';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
-import type { DatasetLayer, LocationData } from '../types';
+import type { CustomLayer, DatasetLayer, LocationData } from '../types';
+import { isWmsBboxTemplate, maplibreWmsTileUrl, resolveWmsTileUrl } from '../services/wmsTiles';
 
 export interface MapClickInfo {
   features: Array<{ datasetLayerId: string; properties: Record<string, unknown> }>;
+}
+
+export interface NoteMarker {
+  id: string;
+  lat: number;
+  lon: number;
 }
 
 interface MapViewProps {
@@ -28,6 +31,8 @@ interface MapViewProps {
   layers: DatasetLayer[];
   activeLayers: Set<string>;
   currentLocation: LocationData | null;
+  aoiLayers?: CustomLayer[];
+  noteMarkers?: NoteMarker[];
   onMapMove: (center: [number, number], zoom: number) => void;
   onMapClick?: (lat: number, lon: number, info?: MapClickInfo) => void;
 }
@@ -37,6 +42,7 @@ export interface MapViewRef {
   zoomOut: () => void;
   flyTo: (center: [number, number], zoom?: number) => void;
   resetView: () => void;
+  fitBounds: (b: { west: number; south: number; east: number; north: number }, pad?: number) => void;
 }
 
 const DARK_STYLE: maplibregl.StyleSpecification = {
@@ -77,7 +83,6 @@ const SATELLITE_STYLE: maplibregl.StyleSpecification = {
 const DEFAULT_CENTER: [number, number] = [75.5, 13.0];
 const DEFAULT_ZOOM = 8;
 
-// Build an approximation of a geodesic circle (used for the GPS accuracy ring).
 function buildAccuracyCircle(lon: number, lat: number, radiusMeters: number): GeoJSON.Feature<GeoJSON.Polygon> {
   const points = 32;
   const coords: [number, number][] = [];
@@ -94,20 +99,31 @@ function buildAccuracyCircle(lon: number, lat: number, radiusMeters: number): Ge
   return { type: 'Feature', geometry: { type: 'Polygon', coordinates: [coords] }, properties: {} };
 }
 
+function tilePathForLayer(layer: DatasetLayer): string {
+  const path = layer.source.path;
+  if (isWmsBboxTemplate(path) && path.includes('{bbox-epsg-3857}')) {
+    return maplibreWmsTileUrl(path);
+  }
+  return path;
+}
+
 const MapView = forwardRef<MapViewRef, MapViewProps>(
-  ({ center, zoom, basemap, layers, activeLayers, currentLocation, onMapMove, onMapClick }, ref) => {
+  ({ center, zoom, basemap, layers, activeLayers, currentLocation, aoiLayers = [], noteMarkers = [], onMapMove, onMapClick }, ref) => {
     const mapContainer = useRef<HTMLDivElement>(null);
     const map = useRef<maplibregl.Map | null>(null);
     const userMarker = useRef<maplibregl.Marker | null>(null);
 
-    // Latest-prop refs (MapLibre handlers are bound once).
     const activeLayersRef = useRef<Set<string>>(activeLayers);
     const onMapMoveRef = useRef(onMapMove);
     const onMapClickRef = useRef(onMapClick);
+    const aoiRef = useRef(aoiLayers);
+    const notesRef = useRef(noteMarkers);
 
     useEffect(() => { activeLayersRef.current = activeLayers; }, [activeLayers]);
     useEffect(() => { onMapMoveRef.current = onMapMove; }, [onMapMove]);
     useEffect(() => { onMapClickRef.current = onMapClick; }, [onMapClick]);
+    useEffect(() => { aoiRef.current = aoiLayers; }, [aoiLayers]);
+    useEffect(() => { notesRef.current = noteMarkers; }, [noteMarkers]);
 
     useImperativeHandle(ref, () => ({
       zoomIn: () => map.current?.zoomIn({ duration: 300 }),
@@ -121,18 +137,84 @@ const MapView = forwardRef<MapViewRef, MapViewProps>(
       resetView: () => map.current?.flyTo({
         center: DEFAULT_CENTER, zoom: DEFAULT_ZOOM, duration: 1000, essential: true,
       }),
+      fitBounds: (b, pad = 48) => {
+        map.current?.fitBounds([[b.west, b.south], [b.east, b.north]], { padding: pad, duration: 800, maxZoom: 15 });
+      },
     }), []);
 
-    // Sync raster overlays into the map (idempotent).
+    const syncAoiAndNotes = useCallback(() => {
+      const m = map.current;
+      if (!m || !m.isStyleLoaded()) return;
+
+      const aoiFc: GeoJSON.FeatureCollection = {
+        type: 'FeatureCollection',
+        features: aoiRef.current.flatMap((layer) =>
+          (layer.geojsonData?.features || []).map((f) => ({
+            ...f,
+            properties: { ...(f.properties || {}), _aoi: layer.title },
+          }))
+        ),
+      };
+      const aoiSrc = m.getSource('aoi-source') as maplibregl.GeoJSONSource | undefined;
+      if (aoiSrc) aoiSrc.setData(aoiFc);
+      else {
+        m.addSource('aoi-source', { type: 'geojson', data: aoiFc });
+        m.addLayer({
+          id: 'aoi-fill',
+          type: 'fill',
+          source: 'aoi-source',
+          filter: ['in', '$type', 'Polygon', 'MultiPolygon'],
+          paint: { 'fill-color': '#4caf50', 'fill-opacity': 0.12 },
+        });
+        m.addLayer({
+          id: 'aoi-line',
+          type: 'line',
+          source: 'aoi-source',
+          paint: { 'line-color': '#81c784', 'line-width': 2 },
+        });
+        m.addLayer({
+          id: 'aoi-pts',
+          type: 'circle',
+          source: 'aoi-source',
+          filter: ['in', '$type', 'Point', 'MultiPoint'],
+          paint: { 'circle-radius': 5, 'circle-color': '#81c784', 'circle-stroke-width': 1, 'circle-stroke-color': '#0a0a12' },
+        });
+      }
+
+      const notesFc: GeoJSON.FeatureCollection = {
+        type: 'FeatureCollection',
+        features: notesRef.current.map((n) => ({
+          type: 'Feature',
+          geometry: { type: 'Point', coordinates: [n.lon, n.lat] },
+          properties: { id: n.id },
+        })),
+      };
+      const nSrc = m.getSource('notes-source') as maplibregl.GeoJSONSource | undefined;
+      if (nSrc) nSrc.setData(notesFc);
+      else {
+        m.addSource('notes-source', { type: 'geojson', data: notesFc });
+        m.addLayer({
+          id: 'notes-dots',
+          type: 'circle',
+          source: 'notes-source',
+          paint: {
+            'circle-radius': 6,
+            'circle-color': '#ffd54f',
+            'circle-stroke-width': 2,
+            'circle-stroke-color': '#0a0a12',
+          },
+        });
+      }
+    }, []);
+
     const syncRasterLayers = useCallback(() => {
       const m = map.current;
       if (!m) return;
       if (!m.isStyleLoaded()) {
-        m.once('styledata', syncRasterLayers);
+        m.once('styledata', () => { syncRasterLayers(); syncAoiAndNotes(); });
         return;
       }
       for (const layer of layers) {
-        // Handle static image overlays (PNG with bounds)
         if (layer.type === 'image-overlay' && layer.source.format === 'png' && layer.bounds) {
           const sourceId = `source-${layer.id}`;
           const layerId = `layer-${layer.id}`;
@@ -144,10 +226,10 @@ const MapView = forwardRef<MapViewRef, MapViewProps>(
                 type: 'image',
                 url: layer.source.path,
                 coordinates: [
-                  [west, north],  // top-left
-                  [east, north],  // top-right
-                  [east, south],  // bottom-right
-                  [west, south],  // bottom-left
+                  [west, north],
+                  [east, north],
+                  [east, south],
+                  [west, south],
                 ],
               });
               m.addLayer({
@@ -167,10 +249,8 @@ const MapView = forwardRef<MapViewRef, MapViewProps>(
         }
 
         if (layer.type !== 'raster' || layer.source.format !== 'xyz') continue;
-        const tile = layer.source.path;
-        if (!tile || tile.startsWith('dynamicworld://') || tile.startsWith('indiasat://')) {
-          continue;
-        }
+        const tile = tilePathForLayer(layer);
+        if (!tile || tile.startsWith('dynamicworld://') || tile.startsWith('indiasat://')) continue;
         const sourceId = `source-${layer.id}`;
         const layerId = `layer-${layer.id}`;
         const isActive = activeLayers.has(layer.id);
@@ -197,9 +277,9 @@ const MapView = forwardRef<MapViewRef, MapViewProps>(
           console.warn(`Failed to add raster ${layer.id}:`, err);
         }
       }
-    }, [layers, activeLayers]);
+      syncAoiAndNotes();
+    }, [layers, activeLayers, syncAoiAndNotes]);
 
-    // Initialize map once.
     useEffect(() => {
       if (!mapContainer.current || map.current) return;
       map.current = new maplibregl.Map({
@@ -214,6 +294,10 @@ const MapView = forwardRef<MapViewRef, MapViewProps>(
         touchPitch: false,
         dragRotate: false,
         pitchWithRotate: false,
+        transformRequest: (url) => {
+          const wms = resolveWmsTileUrl(url);
+          return wms ? { url: wms } : { url };
+        },
       });
       map.current.addControl(new maplibregl.ScaleControl({ maxWidth: 100 }), 'bottom-left');
 
@@ -249,7 +333,6 @@ const MapView = forwardRef<MapViewRef, MapViewProps>(
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
-    // Basemap swap.
     useEffect(() => {
       if (!map.current) return;
       map.current.setStyle(basemap === 'dark' ? DARK_STYLE : SATELLITE_STYLE);
@@ -257,8 +340,8 @@ const MapView = forwardRef<MapViewRef, MapViewProps>(
     }, [basemap, syncRasterLayers]);
 
     useEffect(() => { syncRasterLayers(); }, [syncRasterLayers]);
+    useEffect(() => { syncAoiAndNotes(); }, [aoiLayers, noteMarkers, syncAoiAndNotes]);
 
-    // Follow center/zoom prop changes when the move is significant.
     useEffect(() => {
       if (!map.current) return;
       const c = map.current.getCenter();
@@ -269,7 +352,6 @@ const MapView = forwardRef<MapViewRef, MapViewProps>(
       }
     }, [center, zoom]);
 
-    // GPS marker + accuracy circle.
     useEffect(() => {
       const m = map.current;
       if (!m || !currentLocation) return;

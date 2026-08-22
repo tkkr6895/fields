@@ -7,16 +7,16 @@ interface OnboardingProps {
 
 const SLIDES = [
   {
-    title: 'Walk. Look. Record.',
-    body: 'Fields is a notebook for the landscape. Stand somewhere, tap the map (or Locate me), and tell us what you actually see — trees, crops, water, buildings, or bare ground.',
+    title: 'Photograph the tree',
+    body: 'Tap the green +. The camera opens immediately. Name the tree if you can, say native / plantation / mixed, then save and keep walking. Nothing waits on the network.',
   },
   {
     title: 'Maps are a hint, not the truth',
-    body: 'You can turn on satellite land-cover maps (Dynamic World, India SAT / CoRE Stack) and Tessera’s landscape fingerprint. If they look wrong, that is useful — record what is on the ground.',
+    body: 'You can colour the map with IndiaSAT land cover from CoRE Stack, and every photo stores a Tessera tile id. If the map looks wrong, that is useful — record what is on the ground.',
   },
   {
     title: 'Your notes train better maps',
-    body: 'Each save stores GPS, a photo if you take one, tree type, and land cover. Export from Settings to use the data with models. Nothing leaves this phone until you export.',
+    body: 'Each save stores GPS, a photo, tree name if you know it, and stand type. Maps and weather attach later when you have signal. Export from the Log when you are back.',
   },
 ];
 

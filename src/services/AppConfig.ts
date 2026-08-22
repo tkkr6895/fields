@@ -1,11 +1,10 @@
 /**
  * Runtime configuration stored on-device so the Android APK can be pointed
- * at live proxies/API keys without rebuilding.
+ * at live APIs without rebuilding.
  */
 
 const KEYS = {
   corestackApiKey: 'fields_corestack_api_key',
-  geeProxyUrl: 'fields_gee_proxy_url',
   tesseraProxyUrl: 'fields_tessera_proxy_url',
 } as const;
 
@@ -40,17 +39,6 @@ export function getCoreStackApiKey(): string {
 
 export function setCoreStackApiKey(value: string): void {
   writeLs(KEYS.corestackApiKey, value);
-}
-
-export function getGeeProxyUrl(): string | null {
-  const stored = readLs(KEYS.geeProxyUrl);
-  const env = (import.meta.env.VITE_DW_GEE_PROXY_URL || '').trim();
-  const raw = stored || env || (import.meta.env.DEV ? '/api/dw' : '');
-  return raw ? abs(raw) : null;
-}
-
-export function setGeeProxyUrl(value: string): void {
-  writeLs(KEYS.geeProxyUrl, value);
 }
 
 export function getTesseraProxyUrl(): string | null {

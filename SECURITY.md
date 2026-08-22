@@ -1,85 +1,36 @@
-# Security & Privacy
+# Security & privacy
 
-This document explains how the WG Field Validator app handles sensitive data and credentials.
+Fields is meant to be shared as public source. **Do not commit API keys.**
 
-## 🔐 Credential Handling
+## Keys
 
-### API Keys Are Never Stored in Code
+| Secret | Where it lives | Sent to |
+| --- | --- | --- |
+| CoRE Stack API key | `.env` as `VITE_CORESTACK_API_KEY` (dev build) and/or Settings → localStorage `fields_corestack_api_key` | CoRE Stack HTTPS only, header `X-API-Key` |
+| Tessera proxy URL | Settings / env | Your proxy, if you run one |
 
-The app is designed to be **safe to share publicly**. No API keys, credentials, or secrets are hardcoded in the source code or bundled with the APK.
+`.gitignore` excludes `.env`, `creds/`, keystores. The folder `creds/` is for your machine only.
 
-### How API Keys Work
+There is **no** Google Earth Engine OAuth in the current app.
 
-1. **CoreStack API Key**
-   - Entered by you in the app settings (🔑 button)
-   - Stored **only on your device** in the browser's localStorage
-   - Never transmitted except to the CoreStack API itself
-   - Never logged or shared with third parties
+## On device
 
-2. **Google Earth Engine (GEE)**
-   - If you need GEE integration, you authenticate through Google's OAuth flow
-   - Tokens are stored locally on your device
-   - The app never sees your Google password
+| Data | Where | Leaves the phone? |
+| --- | --- | --- |
+| Photos, GPS, notes | IndexedDB | Only when **you** export or share |
+| API key | localStorage | CoRE API requests |
+| Map tiles | HTTP cache | Tile servers |
 
-### What the APK Contains
+## Network (when online)
 
-The APK/app bundle includes:
-- ✅ App code (HTML, CSS, JavaScript)
-- ✅ Offline maps and datasets (public data only)
-- ✅ Place name gazetteer
-- ❌ **NO** API keys
-- ❌ **NO** user credentials
-- ❌ **NO** private data
+- CoRE Stack + GeoServer (maps)
+- Open-Meteo (weather)
+- GBIF (species hints)
+- Nominatim (place search)
+- CARTO / Esri (basemaps)
 
-## 🔒 Data Storage
+No analytics SDK. Review notes before you share a ZIP.
 
-| Data Type | Storage Location | Shared? |
-|-----------|------------------|---------|
-| API Keys | Device localStorage | ❌ No |
-| Observations | Device IndexedDB | ❌ No |
-| Photos | Device IndexedDB | ❌ No |
-| Map tiles | Device cache | ❌ No |
+## APK contents
 
-## 🌐 Network Requests
-
-When online, the app may connect to:
-
-1. **OpenStreetMap Nominatim** (place search)
-   - No authentication required
-   - Only sends search queries
-
-2. **CoreStack API** (optional enrichment)
-   - Only if you configure an API key
-   - Uses HTTPS encryption
-   - API key sent in request headers
-
-3. **Map tile servers** (basemaps)
-   - Carto Dark tiles
-   - ESRI Satellite tiles
-   - No authentication, public tiles
-
-## 🛡️ Best Practices
-
-1. **Keep your API key private** - Don't share it in screenshots or logs
-2. **Use the app's settings** - Enter API keys through the secure UI
-3. **Export carefully** - When exporting observations, review for sensitive notes
-
-## 📱 Offline Mode
-
-The app works fully offline:
-- All local datasets are pre-bundled
-- Place search works offline for Karnataka
-- Observations saved locally until you choose to export
-- No network requests required for core functionality
-
-## 🔄 Source Code Audit
-
-The app is open source. You can verify:
-- No hardcoded secrets in `/src`
-- API keys loaded from localStorage only
-- No telemetry or tracking code
-- All network requests are explicit in the service files
-
----
-
-**Questions?** Open an issue on GitHub.
+Public code, bundled Western Ghats rasters, **no** baked-in CoRE key unless you set `VITE_CORESTACK_API_KEY` at **your** build time (do not do that on the public GitHub Actions build).

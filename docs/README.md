@@ -1,14 +1,21 @@
 # Fields docs
 
-Start with the root [README](../README.md). This folder holds reference material; some of it describes older UI names.
+Start with the root [README](../README.md), then walk through a worked example in [example-flows/](../example-flows/).
+
+This folder is reference material for people changing the code.
 
 | Doc | Use |
 | --- | --- |
-| [PENDING_ISSUES.md](./PENDING_ISSUES.md) | What still needs credentials or a hosted proxy |
-| [API_INTEGRATIONS.md](./API_INTEGRATIONS.md) | CoRE Stack, GEE, weather |
-| [ARCHITECTURE.md](./ARCHITECTURE.md) | Stack overview (partially historical) |
-| [plan/SPEC.md](./plan/SPEC.md) | Original product spec |
-| [schemas/training_pipeline_schema.json](./schemas/training_pipeline_schema.json) | Export shape for model training |
-| [archive/](./archive/) | Session notes, demo scripts, stale handoffs |
+| [DEVELOPER_GUIDE.md](./DEVELOPER_GUIDE.md) | Clone, `.env`, `npm run dev`, Android |
+| [API_INTEGRATIONS.md](./API_INTEGRATIONS.md) | CoRE Stack (`X-API-Key`), IndiaSAT WMS, Tessera, weather, GBIF |
+| [ARCHITECTURE.md](./ARCHITECTURE.md) | How capture, map, and background enrich fit together |
+| [PENDING_ISSUES.md](./PENDING_ISSUES.md) | Field-trial caveats (coverage, CORS on APK) |
+| [SERVICES.md](./SERVICES.md) | Service modules (current index; some older names remain in git history) |
+| [COMPONENTS.md](./COMPONENTS.md) | UI components |
+| [DATABASE.md](./DATABASE.md) | IndexedDB / Dexie |
+| [TYPES.md](./TYPES.md) | TypeScript types |
+| [STAC_ALIGNMENT.md](./STAC_ALIGNMENT.md) | Export metadata |
+| [plan/](./plan/) | Original spec (historical) |
+| [archive/](./archive/) | Demo scripts and session notes (often outdated) |
 
-Tessera embeddings are not streamed as a global raster in the app. Every observation stores `tessera.tileId` (`grid_{lon}_{lat}` on the 0.1° grid, year 2024 by default) so you can join labels to [GeoTessera](https://github.com/ucam-eo/geotessera) tiles on a workstation.
+**Current product (v1.2):** photo-first notes for **tree species mapping** and **IndiaSAT / CoRE Stack** validation. There is **no Google Earth Engine** and **no Dynamic World** in the running app. Tessera embeddings are not painted as a global raster; every observation stores `tessera.tileId` (`grid_{lon}_{lat}` on a 0.1° grid) so you can join [GeoTessera](https://github.com/ucam-eo/geotessera) tiles on a workstation.

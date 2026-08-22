@@ -277,7 +277,7 @@ export const ObservationDetailModal: React.FC<ObservationDetailModalProps> = ({
                   {/* Land Cover */}
                   {enrichment.landCover && (
                     <div className="obs-section">
-                      <h4>🌍 Land Cover (Dynamic World)</h4>
+                      <h4>🌍 Land cover (IndiaSAT)</h4>
                       {enrichment.landCover.regionalSummary ? (
                         <div className="land-cover-grid">
                           <div className="data-type-badge">

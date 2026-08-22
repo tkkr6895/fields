@@ -1,5 +1,9 @@
 # Fields — Product Specification
 
+> **Shipped v1.2 (Aug 2026):** photo-first tree notes, IndiaSAT/CoRE Stack (no GEE), Tessera tile ids, AOI import. Treat sections below as historical intent where they mention Dynamic World or a nested `field-validator-app/` path.
+
+> Landscape Intelligence for Environmental Commons
+
 > Landscape Intelligence for Environmental Commons
 > Version 0.2 · March 2026 (revised: deprioritised auth/gamification, real data sources, custom layers)
 

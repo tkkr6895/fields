@@ -212,6 +212,24 @@
   box-shadow: 0 6px 18px rgba(0,0,0,0.3);
 }
 
+.fields-toast {
+  position: absolute;
+  left: 50%;
+  bottom: 168px;
+  transform: translateX(-50%);
+  width: min(90vw, 420px);
+  z-index: 80;
+  background: rgba(20, 28, 20, 0.95);
+  color: #e8f5e9;
+  border: 1px solid rgba(76, 175, 80, 0.45);
+  border-radius: 12px;
+  padding: 10px 14px;
+  font-size: 0.85rem;
+  line-height: 1.35;
+  box-shadow: 0 10px 28px rgba(0,0,0,0.35);
+  pointer-events: none;
+}
+
 /* ─── ValidationCapture modal ───────────────────────────────────────── */
 .vc-overlay {
   position: fixed; inset: 0;

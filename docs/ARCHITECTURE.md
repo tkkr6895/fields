@@ -5,8 +5,8 @@ Fields is an offline-first PWA (and Capacitor Android wrapper) for **ground note
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │  Header (online / pending)          Settings (AOI, API key) │
-│  MapLibre: satellite/dark, IndiaSAT WMS, AOI, note dots     │
-│  SpotBar (place + Tessera tile id)                          │
+│  MapLibre: one colour overlay at a time (IndiaSAT or Tessera)│
+│  SpotBar (place + Tessera tile id + IndiaSAT class name)    │
 │  Bottom: Map | Maps |  +  | Log                             │
 └─────────────────────────────────────────────────────────────┘
         │ + = QuickCapture (camera, no network wait)
@@ -26,7 +26,8 @@ Fields is an offline-first PWA (and Capacitor Android wrapper) for **ground note
 ## Map
 
 - Basemaps: CARTO dark, Esri World Imagery.
-- IndiaSAT / CoRE rasters: WMS via `wmsTiles.ts` (XYZ rewritten to EPSG:3857 bbox).
+- IndiaSAT / CoRE rasters: WMS via `wmsTiles.ts` (XYZ rewritten to EPSG:3857 bbox). Class colours from the IndiaSAT legend.
+- Tessera: one packed JPEG per 0.1° tile (`public/data/tessera/`) as a MapLibre image overlay. Mutually exclusive with IndiaSAT so the two products cannot be mistaken for each other.
 - Imported AOIs: GeoJSON from IndexedDB (`CustomLayerManager`).
 - Bundled forest PNGs: `RasterLayerService` + `image-manifest`.
 

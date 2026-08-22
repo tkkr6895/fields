@@ -11,15 +11,17 @@ import { deriveSeason } from '../services/SeasonService';
 import { getDeviceId, getUserName } from '../services/DeviceService';
 import { tesseraTileForPoint } from '../services/TesseraService';
 import { gbifService, type GBIFSpeciesSuggestion } from '../services/GBIFService';
+import { indiaSatService, INDIASAT_CLASSES } from '../services/IndiaSATService';
 import type { LocationData, Observation, ImageData } from '../types';
 
 interface QuickCaptureProps {
   focusLocation: LocationData | null;
+  indiaSatHint?: { name: string; color: string; classId: number } | null;
   onSubmit: (obs: Observation) => void | Promise<void>;
   onClose: () => void;
 }
 
-const QuickCapture: React.FC<QuickCaptureProps> = ({ focusLocation, onSubmit, onClose }) => {
+const QuickCapture: React.FC<QuickCaptureProps> = ({ focusLocation, indiaSatHint, onSubmit, onClose }) => {
   const [location, setLocation] = useState<LocationData | null>(focusLocation);
   const [imageData, setImageData] = useState<ImageData | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
@@ -29,6 +31,8 @@ const QuickCapture: React.FC<QuickCaptureProps> = ({ focusLocation, onSubmit, on
   const [busy, setBusy] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [indiaAgree, setIndiaAgree] = useState<'agree' | 'disagree' | 'unsure' | 'unrated'>('unrated');
+  const [observerClassId, setObserverClassId] = useState<number | undefined>();
   const [more, setMore] = useState(false);
   const [hints, setHints] = useState<GBIFSpeciesSuggestion[]>([]);
   const hintTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -113,6 +117,23 @@ const QuickCapture: React.FC<QuickCaptureProps> = ({ focusLocation, onSubmit, on
           coverComposition: [{ cover: 'tree', percent: 70 }],
         },
         speciesData: species.trim() ? { speciesId: species.trim(), vernacularName: species.trim() } : undefined,
+        predictionValidation: indiaSatHint ? {
+          capturedAt: now,
+          perSource: [{
+            source: 'indiasat',
+            classId: indiaSatHint.classId,
+            className: indiaSatHint.name,
+            classColor: indiaSatHint.color,
+            confidence: null,
+            asOf: now,
+            live: true,
+            agreement: indiaAgree,
+            observerClassId: indiaAgree === 'disagree' ? observerClassId : undefined,
+            observerClassName: indiaAgree === 'disagree' && observerClassId != null
+              ? (INDIASAT_CLASSES[observerClassId]?.name)
+              : undefined,
+          }],
+        } : undefined,
         tessera: {
           year: tile.year,
           tileId: tile.tileId,
@@ -140,7 +161,7 @@ const QuickCapture: React.FC<QuickCaptureProps> = ({ focusLocation, onSubmit, on
           </div>
         </header>
         <main className="vc-body">
-          <p className="vc-help">Take the photo first. Maps and IndiaSAT fill in after you save, when you have signal.</p>
+          <p className="vc-help">Take the photo first. Maps fill in after you save, when you have signal.</p>
           <div className="vc-photo">
             {preview ? <img src={preview} alt="Tree" className="vc-photo__preview" /> : <div className="vc-photo__placeholder">{busy ? 'Opening camera…' : 'No photo yet'}</div>}
             <div className="vc-photo__btns">
@@ -170,6 +191,28 @@ const QuickCapture: React.FC<QuickCaptureProps> = ({ focusLocation, onSubmit, on
                   {h.commonName || h.scientificName}
                 </button>
               ))}
+            </div>
+          )}
+          {indiaSatHint && (
+            <div className="vc-validate">
+              <p className="vc-field-label">IndiaSAT says <span className="legend-swatch" style={{ background: indiaSatHint.color }} /> {indiaSatHint.name}. On the ground?</p>
+              <div className="vc-category-btns">
+                {(['agree', 'disagree', 'unsure'] as const).map(id => (
+                  <button key={id} type="button" className={`vc-cat-btn ${indiaAgree === id ? 'vc-cat-btn--on' : ''}`} onClick={() => setIndiaAgree(id)}>
+                    <span>{id === 'agree' ? 'Looks right' : id === 'disagree' ? 'Wrong class' : 'Not sure'}</span>
+                  </button>
+                ))}
+              </div>
+              {indiaAgree === 'disagree' && (
+                <label className="vc-field-label">What is it actually?
+                  <select value={observerClassId ?? ''} onChange={(e) => setObserverClassId(Number(e.target.value))}>
+                    <option value="">Pick a class</option>
+                    {indiaSatService.listClasses().filter(c => c.id !== 0).map(c => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+                </label>
+              )}
             </div>
           )}
           <div className="vc-category-btns">

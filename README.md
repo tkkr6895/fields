@@ -7,7 +7,7 @@ This repository **is** the app (`https://github.com/tkkr6895/fields`). There is 
 | I want to… | Go here |
 | --- | --- |
 | Run it in 5 minutes | [Develop](#develop) below |
-| Walk a field day | [example-flows/](./example-flows/) (CoRE/IndiaSAT validation + tree species / Tessera) |
+| Walk a field day | [example-flows/](./example-flows/) — [IndiaSAT validation](./example-flows/01-indiasat-validation.html) and [Tessera tree species](./example-flows/02-tessera-tree-species.html) |
 | Change code | [docs/DEVELOPER_GUIDE.md](./docs/DEVELOPER_GUIDE.md) · [docs/README.md](./docs/README.md) |
 | Install on a phone | [BUILD_APK.md](./BUILD_APK.md) |
 | Understand APIs | [docs/API_INTEGRATIONS.md](./docs/API_INTEGRATIONS.md) |

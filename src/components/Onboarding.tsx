@@ -12,7 +12,7 @@ const SLIDES = [
   },
   {
     title: 'Maps are a hint, not the truth',
-    body: 'You can colour the map with IndiaSAT land cover from CoRE Stack, and every photo stores a Tessera tile id. If the map looks wrong, that is useful — record what is on the ground.',
+    body: 'You can colour the map with IndiaSAT land cover from CoRE Stack, and Tessera landscape colour for the tile under your feet (packed for Sulya). If the colour is wrong, photograph it — that is the dataset.',
   },
   {
     title: 'Your notes train better maps',

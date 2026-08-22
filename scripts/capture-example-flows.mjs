@@ -3,7 +3,7 @@
  * Usage: BASE_URL=http://127.0.0.1:5173 node scripts/capture-example-flows.mjs
  */
 import { chromium } from 'playwright';
-import { mkdirSync } from 'fs';
+import { mkdirSync, readFileSync } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
 
@@ -12,9 +12,20 @@ const root = join(__dir, '..');
 const out = process.env.SHOT_DIR || join(root, 'example-flows', 'screenshots');
 mkdirSync(out, { recursive: true });
 
+function coreKeyFromEnv() {
+  try {
+    const text = readFileSync(join(root, '.env'), 'utf8');
+    const m = text.match(/^VITE_CORESTACK_API_KEY=(.+)$/m);
+    return m ? m[1].trim().replace(/^['"]|['"]$/g, '') : '';
+  } catch {
+    return '';
+  }
+}
+
 const AOI = process.env.AOI_PATH || join(root, 'public/data/sample-sulya-aoi.geojson');
 const BASE = process.env.BASE_URL || 'http://127.0.0.1:5173';
 const SULYA = { lat: 12.561, lon: 75.387 };
+const CORE_KEY = process.env.CORESTACK_API_KEY || coreKeyFromEnv();
 
 async function shot(page, name) {
   await page.waitForTimeout(600);
@@ -61,13 +72,14 @@ const context = await browser.newContext({
 });
 
 const page = await context.newPage();
-await page.addInitScript(() => {
+await page.addInitScript((key) => {
   localStorage.setItem('fields_first_launch_completed', 'true');
   localStorage.setItem('fields_user_name', 'Field trial');
   localStorage.setItem('fields_default_basemap', 'satellite');
   localStorage.setItem('fields_default_center', '75.387, 12.561');
   localStorage.setItem('fields_default_zoom', '13');
-});
+  if (key) localStorage.setItem('fields_corestack_api_key', key);
+}, CORE_KEY);
 
 await page.goto(BASE, { waitUntil: 'networkidle', timeout: 120000 });
 await dismissOnboarding(page);
@@ -100,15 +112,34 @@ await page.waitForTimeout(800);
 await shot(page, '05-map-with-aoi');
 
 await page.getByRole('button', { name: /^maps$/i }).click();
-await page.waitForTimeout(500);
+await page.waitForTimeout(1800);
 await shot(page, '06-maps-panel');
 
-const indiaToggle = page.locator('.overlay-card', { hasText: 'IndiaSAT' }).locator('input[type="checkbox"]');
+const indiaToggle = page.locator('.overlay-card', { hasText: 'IndiaSAT land cover' }).locator('input[type="checkbox"]');
 if (await indiaToggle.count()) {
   await indiaToggle.first().evaluate((el) => el.click());
-  await page.waitForTimeout(2500);
+  await page.waitForTimeout(800);
 }
+await page.locator('.panel-close').click().catch(() => {});
+await page.getByRole('button', { name: /^map$/i }).click().catch(() => {});
+await page.waitForTimeout(4500);
 await shot(page, '07-indiasat-on');
+
+await page.getByRole('button', { name: /^maps$/i }).click();
+await page.waitForTimeout(600);
+const tesseraToggle = page.locator('.overlay-card', { hasText: 'Tessera landscape colour' }).locator('input[type="checkbox"]');
+if (await tesseraToggle.count()) {
+  await tesseraToggle.first().evaluate((el) => el.click());
+  await page.waitForTimeout(800);
+}
+await page.locator('.panel-close').click().catch(() => {});
+await page.getByRole('button', { name: /^map$/i }).click().catch(() => {});
+await page.waitForTimeout(1800);
+await shot(page, '12-tessera-colour');
+
+await page.getByRole('button', { name: /^maps$/i }).click();
+await page.waitForTimeout(800);
+await shot(page, '13-core-taluk');
 
 await page.locator('.panel-close').click().catch(() => {});
 await page.getByRole('button', { name: /^map$/i }).click().catch(() => {});

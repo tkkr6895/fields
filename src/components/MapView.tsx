@@ -214,8 +214,25 @@ const MapView = forwardRef<MapViewRef, MapViewProps>(
         m.once('styledata', () => { syncRasterLayers(); syncAoiAndNotes(); });
         return;
       }
+
+      const wantedSources = new Set(layers.map(l => `source-${l.id}`));
+      const style = m.getStyle();
+      for (const srcId of Object.keys(style?.sources || {})) {
+        if (!srcId.startsWith('source-')) continue;
+        if (srcId === 'source-aoi' || srcId === 'notes-source') continue;
+        if (!wantedSources.has(srcId)) {
+          const layerId = srcId.replace('source-', 'layer-');
+          try {
+            if (m.getLayer(layerId)) m.removeLayer(layerId);
+            if (m.getSource(srcId)) m.removeSource(srcId);
+          } catch {
+            /* style may already have dropped it */
+          }
+        }
+      }
+
       for (const layer of layers) {
-        if (layer.type === 'image-overlay' && layer.source.format === 'png' && layer.bounds) {
+        if (layer.type === 'image-overlay' && layer.bounds) {
           const sourceId = `source-${layer.id}`;
           const layerId = `layer-${layer.id}`;
           const isActive = activeLayers.has(layer.id);
@@ -236,7 +253,7 @@ const MapView = forwardRef<MapViewRef, MapViewProps>(
                 id: layerId,
                 type: 'raster',
                 source: sourceId,
-                paint: { 'raster-opacity': layer.style?.opacity ?? 0.7, 'raster-fade-duration': 0 },
+                paint: { 'raster-opacity': layer.style?.opacity ?? 0.72, 'raster-fade-duration': 0 },
                 layout: { visibility: isActive ? 'visible' : 'none' },
               });
             } else if (m.getLayer(layerId)) {

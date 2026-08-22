@@ -199,6 +199,7 @@ class SyncEngine {
             tehsil: core.admin.tehsil,
             block: core.admin.block,
             layerNames: core.layers.map(l => l.name),
+            kyl: core.mwsId ? { mwsId: core.mwsId } : null,
           },
         });
       }

@@ -1,12 +1,15 @@
-# Example flows
+# Field flows
 
-Phone-shaped screenshots from the live Fields app (390×844, satellite basemap, Sulya, Karnataka). Open any PNG in `screenshots/` at 2× for print.
+Open the HTML in a browser (editor Markdown often hides images), or the PDF on GitHub.
 
-| Guide | Start here |
-| --- | --- |
-| [01 — Validate CoRE Stack / IndiaSAT on the ground](./01-core-stack-lulc-validation.md) | Load tehsil maps, stand on a pixel, photograph what you see, export |
-| [02 — Tree species mapping with Tessera](./02-tree-species-mapping.md) | AOI, Tessera tile ids, photo-first notes, background enrich, join later |
+| Flow | What you see on the map | Open |
+| --- | --- | --- |
+| 1 · **IndiaSAT validation** | CoRE WMS class colours (trees / orchard / crop / water / built-up) | [HTML](./01-indiasat-validation.html) · [PDF](./01-indiasat-validation.pdf) |
+| 2 · **Tessera tree species** | One 0.1° RGB fingerprint (embedding bands 30/60/90), plus a species note | [HTML](./02-tessera-tree-species.html) · [PDF](./02-tessera-tree-species.pdf) |
 
-There is **no web dashboard**. Load a place or a GeoJSON in **Settings** before you leave. Sample polygon: [`public/data/sample-sulya-aoi.geojson`](../public/data/sample-sulya-aoi.geojson).
+Those two rasters are different products. The app turns one off when you turn the other on.
 
-To regenerate screenshots (maintainers): run `npm run dev`, then `node scripts/capture-example-flows.mjs` with Playwright Chrome (`channel: 'chrome'`).
+<p align="center">
+  <img src="screenshots/07-indiasat-on.png" alt="IndiaSAT class map" width="240" />
+  <img src="screenshots/12-tessera-colour.png" alt="Tessera RGB fingerprint" width="240" />
+</p>

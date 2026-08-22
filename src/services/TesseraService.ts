@@ -6,7 +6,8 @@
  * far too large to stream onto a phone. This service:
  *
  * 1. Always records the Tessera tile id so labels can be joined to embeddings later.
- * 2. Optionally samples the 128-d vector + a PCA colour via a lab proxy.
+ * 2. Paints a 3-band RGB fingerprint (bands 30/60/90) for the current 0.1° tile only.
+ * 3. Optionally samples a short embedding preview via a lab proxy.
  *
  * See: https://blog.forestmap.ai/geospatial-foundation-models-a-new-era-for-forest-species-mapping-from-space/
  */
@@ -36,6 +37,106 @@ export interface TesseraPointContext extends TesseraTileRef {
   embeddingPreview?: number[];
   pcaRgb?: [number, number, number];
   note?: string;
+}
+
+/** Lightweight RGB fingerprint of one Tessera tile (not the 128-d tensor). */
+export interface TesseraPreview {
+  tileId: string;
+  year: number;
+  bounds: TesseraTileRef['bounds'];
+  path: string;
+  source: 'preload' | 'proxy';
+  representation: string;
+}
+
+export interface TesseraPreviewManifest {
+  year: number;
+  representation: string;
+  note?: string;
+  tiles: Array<{
+    tileId: string;
+    year: number;
+    bounds: TesseraTileRef['bounds'];
+    path: string;
+  }>;
+}
+
+let previewManifest: TesseraPreviewManifest | null | undefined;
+const previewCache = new Map<string, TesseraPreview | null>();
+
+export async function loadTesseraPreviewManifest(): Promise<TesseraPreviewManifest | null> {
+  if (previewManifest !== undefined) return previewManifest;
+  try {
+    const res = await fetch('/data/tessera/manifest.json', { signal: AbortSignal.timeout(4000) });
+    if (!res.ok) {
+      previewManifest = null;
+      return null;
+    }
+    previewManifest = await res.json() as TesseraPreviewManifest;
+    return previewManifest;
+  } catch {
+    previewManifest = null;
+    return null;
+  }
+}
+
+/**
+ * One 0.1° RGB overlay for the tile under the user.
+ * Prefers a packed AOI preview (offline). Falls back to the Tessera proxy when online.
+ */
+export async function resolveTesseraPreview(
+  lat: number,
+  lon: number,
+  year: TesseraYear = LATEST_TESSERA_YEAR,
+): Promise<TesseraPreview | null> {
+  const tile = tesseraTileForPoint(lat, lon, year);
+  const key = `${tile.tileId}_${year}`;
+  if (previewCache.has(key)) return previewCache.get(key) ?? null;
+
+  const manifest = await loadTesseraPreviewManifest();
+  const packed = manifest?.tiles.find(t => t.tileId === tile.tileId && t.year === year);
+  if (packed) {
+    const preview: TesseraPreview = {
+      tileId: packed.tileId,
+      year: packed.year,
+      bounds: packed.bounds,
+      path: packed.path,
+      source: 'preload',
+      representation: manifest?.representation || 'embedding RGB fingerprint',
+    };
+    previewCache.set(key, preview);
+    return preview;
+  }
+
+  const base = getTesseraProxyUrl();
+  if (base) {
+    try {
+      const url = new URL(`${base}/preview`);
+      url.searchParams.set('lat', String(lat));
+      url.searchParams.set('lon', String(lon));
+      url.searchParams.set('year', String(year));
+      const res = await fetch(url.toString(), { signal: AbortSignal.timeout(20000) });
+      if (res.ok) {
+        const blob = await res.blob();
+        const path = URL.createObjectURL(blob);
+        const preview: TesseraPreview = {
+          tileId: tile.tileId,
+          year,
+          bounds: tile.bounds,
+          path,
+          source: 'proxy',
+          representation: res.headers.get('X-Tessera-Representation') || 'embedding RGB fingerprint',
+        };
+        previewCache.set(key, preview);
+        return preview;
+      }
+    } catch (err) {
+      console.warn('[Tessera] Preview fetch failed:', err);
+    }
+  }
+
+  previewCache.set(key, null);
+  return null;
 }
 
 /** Snap a coordinate onto the Tessera 0.1° tile-center grid (*.05). */

@@ -52,7 +52,9 @@ Implementation: `src/services/CoreStackService.ts` (`authHeaders`, `loadAtPoint`
 
 ## Tessera
 
-On save: `tesseraTileForPoint(lat, lon)` → `grid_{lon}_{lat}` at 0.1°. Optional proxy samples embeddings. Join full tiles on a computer with [geotessera](https://github.com/ucam-eo/geotessera).
+On save: `tesseraTileForPoint(lat, lon)` → `grid_{lon}_{lat}` at 0.1°. The map can paint a **3-band RGB fingerprint** (embedding bands 30/60/90) for the current tile only — packed under `public/data/tessera/` for the Sulya trial AOI (~75 KB per tile), or fetched from `GET /preview` on the optional proxy. Full 128-d embeddings stay on a workstation ([geotessera](https://github.com/ucam-eo/geotessera)).
+
+CoRE Stack also exposes `get_mwsid_by_latlon`, `get_tehsil_data`, and `get_waterbodies_data_by_admin`. The app summarises a few facts on Maps (not the whole tehsil dump) so a walker can check water, cropping, and place names.
 
 ## Weather / GBIF
 

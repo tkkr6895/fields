@@ -74,6 +74,37 @@ def sample_embedding(lat: float, lon: float, year: int) -> dict:
     return extra
 
 
+def preview_png(lat: float, lon: float, year: int):
+    """RGB fingerprint of one Tessera tile: embedding bands 30, 60, 90 stretched to PNG."""
+    try:
+        from geotessera import GeoTessera  # type: ignore
+        import numpy as np  # type: ignore
+        from PIL import Image  # type: ignore
+
+        gt = GeoTessera()
+        embedding, _crs, _transform = gt.fetch_embedding(lon=lon, lat=lat, year=year)
+        arr = np.asarray(embedding)
+        if arr.ndim < 3 or arr.shape[-1] < 91:
+            return None
+        rgb = arr[:, :, [30, 60, 90]].astype("float64")
+        step = max(1, max(rgb.shape[0], rgb.shape[1]) // 640)
+        rgb = rgb[::step, ::step]
+        out = np.zeros((*rgb.shape[:2], 3), dtype="uint8")
+        for i in range(3):
+            band = rgb[:, :, i]
+            lo, hi = np.nanpercentile(band, 2), np.nanpercentile(band, 98)
+            span = (hi - lo) or 1.0
+            out[:, :, i] = np.clip((band - lo) / span * 255.0, 0, 255).astype("uint8")
+        from io import BytesIO
+
+        buf = BytesIO()
+        Image.fromarray(out, mode="RGB").save(buf, format="PNG", optimize=True)
+        return buf.getvalue()
+    except Exception as exc:  # noqa: BLE001
+        print("[tessera-proxy] preview failed:", exc)
+        return None
+
+
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, fmt: str, *args) -> None:
         print("[tessera-proxy]", fmt % args)
@@ -98,6 +129,27 @@ class Handler(BaseHTTPRequestHandler):
         parsed = urlparse(self.path)
         if parsed.path in ("/health", "/"):
             self._send(200, {"ok": True, "service": "fields-tessera-proxy"})
+            return
+        if parsed.path == "/preview":
+            q = parse_qs(parsed.query)
+            try:
+                lat = float(q["lat"][0])
+                lon = float(q["lon"][0])
+            except (KeyError, ValueError, IndexError):
+                self._send(400, {"error": "lat and lon are required"})
+                return
+            year = int(q.get("year", [YEAR_DEFAULT])[0])
+            png = preview_png(lat, lon, year)
+            if not png:
+                self._send(404, {"error": "preview unavailable"})
+                return
+            self.send_response(200)
+            self.send_header("Content-Type", "image/png")
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.send_header("X-Tessera-Representation", "embedding_bands_30_60_90_rgb")
+            self.send_header("Content-Length", str(len(png)))
+            self.end_headers()
+            self.wfile.write(png)
             return
         if parsed.path != "/point":
             self._send(404, {"error": "not found"})

@@ -1,0 +1,53 @@
+{
+  "year": 2024,
+  "representation": "embedding_bands_30_60_90_rgb",
+  "note": "Similar colour \u2248 similar landscape. Not a land-cover legend. One 0.1\u00b0 Tessera tile at a time.",
+  "region": "Sulya, Dakshina Kannada, Karnataka",
+  "bbox": "75.32,12.52,75.48,12.62",
+  "tiles": [
+    {
+      "tileId": "grid_75.45_12.65",
+      "year": 2024,
+      "bounds": {
+        "west": 75.3998442987345,
+        "east": 75.50020889487864,
+        "south": 12.599807482189673,
+        "north": 12.700169527026626
+      },
+      "path": "/data/tessera/previews/grid_75.45_12.65_2024.jpg"
+    },
+    {
+      "tileId": "grid_75.45_12.55",
+      "year": 2024,
+      "bounds": {
+        "west": 75.39984556746363,
+        "east": 75.50016989395569,
+        "south": 12.499806809599118,
+        "north": 12.600168280599114
+      },
+      "path": "/data/tessera/previews/grid_75.45_12.55_2024.jpg"
+    },
+    {
+      "tileId": "grid_75.35_12.65",
+      "year": 2024,
+      "bounds": {
+        "west": 75.29988328496907,
+        "east": 75.40011790179598,
+        "south": 12.59989674269126,
+        "north": 12.700131853215392
+      },
+      "path": "/data/tessera/previews/grid_75.35_12.65_2024.jpg"
+    },
+    {
+      "tileId": "grid_75.35_12.55",
+      "year": 2024,
+      "bounds": {
+        "west": 75.29988423633671,
+        "east": 75.40017100626397,
+        "south": 12.499895917993394,
+        "north": 12.600130883777723
+      },
+      "path": "/data/tessera/previews/grid_75.35_12.55_2024.jpg"
+    }
+  ]
+}

@@ -14,8 +14,8 @@ import { syncEngine } from './services/SyncEngine';
 import { db } from './db/database';
 import { indiaSatService, INDIASAT_CLASSES, INDIASAT_YEARS, type IndiaSATYear, LATEST_INDIASAT_YEAR } from './services/IndiaSATService';
 import { rasterLayerService } from './services/RasterLayerService';
-import { coreStackService } from './services/CoreStackService';
-import { tesseraTileForPoint } from './services/TesseraService';
+import { coreStackService, type CoreStackFact } from './services/CoreStackService';
+import { tesseraTileForPoint, resolveTesseraPreview, type TesseraPreview } from './services/TesseraService';
 import { customLayerManager } from './services/CustomLayerManager';
 import { isFirstLaunchCompleted } from './services/DeviceService';
 import { PREDICTION_SOURCES } from './services/PredictionService';
@@ -64,9 +64,15 @@ function App() {
   const [activeCoreLayers, setActiveCoreLayers] = useState<Set<string>>(new Set());
   const [coreStatus, setCoreStatus] = useState<string | null>(null);
   const [corePlace, setCorePlace] = useState<string | null>(null);
+  const [coreFacts, setCoreFacts] = useState<CoreStackFact[]>([]);
+  const [coreMwsId, setCoreMwsId] = useState<string | null>(null);
   const [aoiLayers, setAoiLayers] = useState<CustomLayer[]>([]);
   const [toast, setToast] = useState<string | null>(null);
   const [noteMarkers, setNoteMarkers] = useState<Array<{ id: string; lat: number; lon: number }>>([]);
+  const [tesseraOn, setTesseraOn] = useState(false);
+  const [tesseraPreview, setTesseraPreview] = useState<TesseraPreview | null>(null);
+  const [tesseraPreviewNote, setTesseraPreviewNote] = useState<string | null>(null);
+  const [indiaSatClass, setIndiaSatClass] = useState<{ name: string; color: string; classId: number } | null>(null);
 
   const [currentLocation, setCurrentLocation] = useState<LocationData | null>(null);
   const [pinnedLocation, setPinnedLocation] = useState<LocationData | null>(null);
@@ -153,19 +159,36 @@ function App() {
     for (const fl of forestLayers) {
       if (activeForestLayers.has(fl.id)) out.push(fl);
     }
+    if (tesseraOn && tesseraPreview) {
+      out.push({
+        id: `tessera_${tesseraPreview.tileId}_${tesseraPreview.year}`,
+        title: `Tessera ${tesseraPreview.tileId}`,
+        type: 'image-overlay',
+        source: { format: 'png', path: tesseraPreview.path },
+        bounds: tesseraPreview.bounds,
+        style: { kind: 'image', opacity: 0.72 },
+        minZoom: 8,
+        maxZoom: 18,
+        category: 'other',
+        enabled: true,
+        year: tesseraPreview.year,
+        description: tesseraPreview.representation,
+      });
+    }
     for (const cl of coreLayers) {
       if (activeCoreLayers.has(cl.id)) out.push({ ...cl, enabled: true });
     }
     return out;
-  }, [indiaSatOn, indiasatTileUrl, indiasatYear, forestLayers, activeForestLayers, coreLayers, activeCoreLayers]);
+  }, [indiaSatOn, indiasatTileUrl, indiasatYear, forestLayers, activeForestLayers, coreLayers, activeCoreLayers, tesseraOn, tesseraPreview]);
 
   const activeLayerIds = useMemo(() => {
     const s = new Set<string>();
     if (indiasatTileUrl && indiaSatOn) s.add(`indiasat_${indiasatYear}`);
+    if (tesseraOn && tesseraPreview) s.add(`tessera_${tesseraPreview.tileId}_${tesseraPreview.year}`);
     for (const id of activeForestLayers) s.add(id);
     for (const id of activeCoreLayers) s.add(id);
     return s;
-  }, [indiaSatOn, indiasatYear, indiasatTileUrl, activeForestLayers, activeCoreLayers]);
+  }, [indiaSatOn, indiasatYear, indiasatTileUrl, tesseraOn, tesseraPreview, activeForestLayers, activeCoreLayers]);
 
   const handleMapMove = useCallback((newCenter: [number, number], newZoom: number) => {
     setCenter(newCenter); setZoom(newZoom);
@@ -201,7 +224,15 @@ function App() {
   const handleCoreToggle = useCallback((layerId: string) => {
     setActiveCoreLayers(prev => {
       const next = new Set(prev);
-      if (next.has(layerId)) next.delete(layerId); else next.add(layerId);
+      if (next.has(layerId)) {
+        next.delete(layerId);
+        return next;
+      }
+      if (next.size >= 2) {
+        const first = next.values().next().value as string | undefined;
+        if (first) next.delete(first);
+      }
+      next.add(layerId);
       return next;
     });
   }, []);
@@ -215,6 +246,8 @@ function App() {
           setCoreStatus(bundle.error);
           setCoreLayers([]);
           setCorePlace(null);
+          setCoreFacts([]);
+          setCoreMwsId(null);
           return;
         }
         const next = coreStackService.toDatasetLayers(bundle.layers);
@@ -222,10 +255,60 @@ function App() {
         const place = [bundle.admin?.tehsil, bundle.admin?.district, bundle.admin?.state].filter(Boolean).join(', ');
         setCorePlace(place || null);
         setCoreStatus(next.length ? `${next.length} maps for ${place || 'this tehsil'}` : (place ? `No extra maps listed for ${place}` : 'No CoRE Stack coverage here'));
+        if (bundle.admin) {
+          coreStackService.enrichFieldBrief(bundle.admin, focusLocation.lat, focusLocation.lon).then(extra => {
+            setCoreFacts(extra.facts || []);
+            setCoreMwsId(extra.mwsId || null);
+          });
+        }
       });
     }, 700);
     return () => window.clearTimeout(handle);
   }, [focusLocation?.lat, focusLocation?.lon, isOnline]);
+
+  useEffect(() => {
+    if (!tesseraOn || !focusLocation) {
+      if (!tesseraOn) {
+        setTesseraPreview(null);
+        setTesseraPreviewNote(null);
+      }
+      return;
+    }
+    let cancelled = false;
+    setTesseraPreviewNote('Loading landscape colour for this Tessera tile…');
+    resolveTesseraPreview(focusLocation.lat, focusLocation.lon).then(preview => {
+      if (cancelled) return;
+      setTesseraPreview(preview);
+      if (preview) {
+        setTesseraPreviewNote(
+          preview.source === 'preload'
+            ? 'Packed for the Sulya trial landscape — one 0.1° tile, not the 128-d tensor.'
+            : 'Downloaded this tile only. Similar colour means similar landscape.',
+        );
+      } else {
+        setTesseraPreviewNote('No fingerprint for this tile yet. Import the Sulya AOI (preloaded) or set a Tessera proxy in Settings when you have signal.');
+      }
+    });
+    return () => { cancelled = true; };
+  }, [tesseraOn, focusLocation?.lat, focusLocation?.lon]);
+
+  useEffect(() => {
+    if (!focusLocation || !isOnline) {
+      setIndiaSatClass(null);
+      return;
+    }
+    const handle = window.setTimeout(() => {
+      indiaSatService.fetchPointData(focusLocation.lat, focusLocation.lon, indiasatYear).then(pt => {
+        if (!pt) {
+          setIndiaSatClass(null);
+          return;
+        }
+        const info = indiaSatService.getClassInfo(pt.classId);
+        setIndiaSatClass({ name: pt.landCoverClass, color: info?.color || '#888', classId: pt.classId });
+      }).catch(() => setIndiaSatClass(null));
+    }, 800);
+    return () => window.clearTimeout(handle);
+  }, [focusLocation?.lat, focusLocation?.lon, indiasatYear, isOnline]);
 
   const handleCaptureButton = useCallback(async () => {
     if (!focusLocation) {
@@ -309,7 +392,12 @@ function App() {
 
         {activeTab === 'map' && (
           <div className="fields-prediction-anchor">
-            <SpotBar focusLocation={focusLocation} placeLabel={corePlace} pendingEnrichment={pendingSync} />
+            <SpotBar
+              focusLocation={focusLocation}
+              placeLabel={corePlace}
+              pendingEnrichment={pendingSync}
+              indiaSatClass={indiaSatClass}
+            />
           </div>
         )}
 
@@ -327,7 +415,13 @@ function App() {
             indiasatYear={indiasatYear}
             indiasatTileError={indiasatTileError}
             isOnline={isOnline}
-            onToggleIndiaSat={() => setIndiaSatOn(v => !v)}
+            onToggleIndiaSat={() => {
+              setIndiaSatOn(v => {
+                const next = !v;
+                if (next) setTesseraOn(false);
+                return next;
+              });
+            }}
             onYearChange={setIndiasatYear}
             forestLayers={FOREST_LAYERS}
             activeForestLayers={activeForestLayers}
@@ -338,6 +432,18 @@ function App() {
             coreStatus={coreStatus}
             corePlace={corePlace}
             tesseraHint={focusLocation ? tesseraTileForPoint(focusLocation.lat, focusLocation.lon).tileId : null}
+            tesseraOn={tesseraOn}
+            tesseraPreviewNote={tesseraPreviewNote}
+            tesseraHasPreview={Boolean(tesseraPreview)}
+            onToggleTessera={() => {
+              setTesseraOn(v => {
+                const next = !v;
+                if (next) setIndiaSatOn(false);
+                return next;
+              });
+            }}
+            coreFacts={coreFacts}
+            coreMwsId={coreMwsId}
             aoiCount={aoiLayers.length}
             onOpenSettings={() => { setActiveTab('map'); setSettingsOpen(true); }}
             onClose={() => setActiveTab('map')}
@@ -369,6 +475,7 @@ function App() {
       {captureOpen && (
         <QuickCapture
           focusLocation={focusLocation}
+          indiaSatHint={indiaSatClass}
           onSubmit={handleObservationSubmit}
           onClose={() => setCaptureOpen(false)}
         />
@@ -402,13 +509,20 @@ const OverlayPanel: React.FC<{
   coreStatus: string | null;
   corePlace: string | null;
   tesseraHint: string | null;
+  tesseraOn: boolean;
+  tesseraPreviewNote: string | null;
+  tesseraHasPreview: boolean;
+  onToggleTessera: () => void;
+  coreFacts: CoreStackFact[];
+  coreMwsId: string | null;
   aoiCount: number;
   onOpenSettings: () => void;
   onClose: () => void;
 }> = ({
   indiaSatOn, indiasatYear, indiasatTileError, isOnline, onToggleIndiaSat, onYearChange,
   forestLayers, activeForestLayers, onForestToggle, coreLayers, activeCoreLayers, onCoreToggle,
-  coreStatus, corePlace, tesseraHint, aoiCount, onOpenSettings, onClose,
+  coreStatus, corePlace, tesseraHint, tesseraOn, tesseraPreviewNote, tesseraHasPreview, onToggleTessera,
+  coreFacts, coreMwsId, aoiCount, onOpenSettings, onClose,
 }) => {
   return (
     <div className="panel-overlay">
@@ -431,7 +545,7 @@ const OverlayPanel: React.FC<{
           <header>
             <div>
               <strong>IndiaSAT land cover</strong>
-              <small>Annual CoRE Stack map for this tehsil — what the model thinks this pixel is</small>
+              <small>Annual CoRE Stack map for this tehsil — class colours (trees, orchard, crop, water, built-up). Turns off Tessera colour so the two rasters are not mixed.</small>
             </div>
             <label className="switch">
               <input type="checkbox" checked={indiaSatOn} onChange={onToggleIndiaSat} disabled={!isOnline} />
@@ -461,27 +575,47 @@ const OverlayPanel: React.FC<{
         <section className="overlay-card">
           <header>
             <div>
-              <strong>Tessera landscape fingerprint</strong>
-              <small>Saved with every photo as a tile id so you can join embeddings on a computer later.</small>
+              <strong>Tessera landscape colour</strong>
+              <small>RGB fingerprint of this 0.1° tile (embedding bands 30 · 60 · 90). Similar colour ≈ similar landscape — not IndiaSAT classes. Turns off land-cover colour while on.</small>
               {tesseraHint && <small>This spot → {tesseraHint}</small>}
             </div>
+            <label className="switch">
+              <input type="checkbox" checked={tesseraOn} onChange={onToggleTessera} />
+              <span />
+            </label>
           </header>
+          {tesseraOn && tesseraPreviewNote && <p className={tesseraHasPreview ? 'overlay-note' : 'overlay-warn'}>{tesseraPreviewNote}</p>}
         </section>
 
         <section className="overlay-card">
           <header>
             <div>
-              <strong>More CoRE Stack maps</strong>
+              <strong>CoRE Stack · this taluk</strong>
               <small>{corePlace || 'Stand on the map or tap a point first'}</small>
+              {coreMwsId && <small>Micro-watershed {coreMwsId}</small>}
               {coreStatus && <small>{coreStatus}</small>}
             </div>
           </header>
+          {coreFacts.length > 0 && (
+            <ul className="core-facts">
+              {coreFacts.map(f => (
+                <li key={f.label}>
+                  <strong>{f.label}</strong>
+                  <span>{f.value}</span>
+                  {f.validate && <em>{f.validate}</em>}
+                </li>
+              ))}
+            </ul>
+          )}
           <div className="forest-layer-list">
-            {coreLayers.length === 0 && <p className="overlay-warn">CoRE Stack key is in Settings. Drainage, water, and crop maps appear when this tehsil has them.</p>}
+            {coreLayers.length === 0 && <p className="overlay-warn">Paste a CoRE Stack key in Settings. Extra rasters (water, canopy, crops) appear when this tehsil has them — at most two at once so the phone stays calm.</p>}
             {coreLayers.map(cl => (
               <label key={cl.id} className="forest-layer-toggle">
                 <input type="checkbox" checked={activeCoreLayers.has(cl.id)} onChange={() => onCoreToggle(cl.id)} />
-                <span>{cl.title}</span>
+                <span>
+                  {cl.title}
+                  {cl.description && <small>{cl.description}</small>}
+                </span>
               </label>
             ))}
           </div>

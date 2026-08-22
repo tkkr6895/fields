@@ -409,6 +409,27 @@
   border: 1px solid var(--fields-border); border-radius: 8px; padding: 4px 6px; margin-top: 2px;
 }
 .overlay-warn { color: var(--fields-warn); font-size: 0.82rem; }
+.overlay-note { color: var(--fields-text-dim); font-size: 0.82rem; margin-top: 8px; }
+.spot-class {
+  display: flex; align-items: center; gap: 6px;
+  margin-top: 6px; font-size: 0.82rem; color: var(--fields-text);
+}
+.core-facts {
+  list-style: none; margin: 10px 0 0; padding: 0;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.core-facts li {
+  display: flex; flex-direction: column; gap: 1px;
+  font-size: 0.82rem;
+}
+.core-facts strong { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--fields-text-dim); }
+.core-facts em { font-style: normal; color: var(--fields-accent); font-size: 0.75rem; }
+.forest-layer-toggle span small { display: block; font-size: 0.72rem; color: var(--fields-text-dim); font-weight: 400; }
+.vc-validate { margin: 8px 0; }
+.vc-validate select {
+  background: rgba(255,255,255,0.06); color: var(--fields-text);
+  border: 1px solid var(--fields-border); border-radius: 8px; padding: 6px;
+}
 .legend {
   list-style: none; padding: 8px 0 0; margin: 8px 0 0;
   display: grid; grid-template-columns: 1fr 1fr; gap: 4px 12px;

@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>IndiaSAT validation — Fields</title>
+  <link rel="stylesheet" href="story.css" />
+</head>
+<body>
+  <div class="wrap">
+    <nav class="top">
+      <a href="index.html">Both flows</a>
+      <a href="02-tessera-tree-species.html">Tessera · trees</a>
+    </nav>
+    <p class="kicker">Flow 1 · IndiaSAT / CoRE Stack</p>
+    <h1>The map has an opinion.<br />You have a photograph.</h1>
+    <p class="lede">
+      IndiaSAT is annual 30&nbsp;m land cover for India, served by CoRE Stack for the taluk under your feet.
+      Colour is a <strong>class legend</strong> — trees, orchard, crops, water, built-up — not Tessera’s rainbow fingerprint.
+    </p>
+
+    <section class="scene">
+      <div>
+        <div class="phone"><img src="screenshots/01-map-home.png" alt="Sulya, GPS, IndiaSAT class on the spot bar" /></div>
+        <p class="caption">Spot bar · Sulya, Dakshina Kannada · IndiaSAT class at this GPS</p>
+      </div>
+      <div class="copy">
+        <h2>Arrive. Read the class.</h2>
+        <p>CoRE names the taluk. GetFeatureInfo names the pixel (for example <strong>Trees</strong>). That is what you agree or disagree with when you save.</p>
+      </div>
+    </section>
+
+    <section class="scene reverse">
+      <div>
+        <div class="phone"><img src="screenshots/02-settings-aoi.png" alt="Settings: go to a place, import GeoJSON" /></div>
+        <p class="caption">Settings · paste a CoRE key, import your plots</p>
+      </div>
+      <div class="copy">
+        <h2>Unlock the tehsil map.</h2>
+        <p>One CoRE Stack key paints IndiaSAT WMS for every taluk that has it. Import GeoJSON of the walk. Without a key you can still collect; maps are a courtesy.</p>
+      </div>
+    </section>
+
+    <section class="scene">
+      <div>
+        <div class="phone"><img src="screenshots/06-maps-panel.png" alt="Maps: IndiaSAT, Tessera, CoRE taluk" /></div>
+        <p class="caption">Maps · IndiaSAT is a class layer; Tessera is a different product</p>
+      </div>
+      <div class="copy">
+        <h2>One colour at a time.</h2>
+        <p>Turn on <strong>IndiaSAT land cover</strong>. Tessera colour switches off so the two rasters cannot mix. CoRE also lists canopy, water, crops for this taluk — at most two extra rasters.</p>
+      </div>
+    </section>
+
+    <section class="scene reverse">
+      <div>
+        <div class="phone"><img src="screenshots/07-indiasat-on.png" alt="IndiaSAT class colours on the satellite map" /></div>
+        <p class="caption">IndiaSAT 2024 WMS · legend colours on the map (not Tessera RGB)</p>
+      </div>
+      <div class="copy">
+        <h2>Walk until the colour is wrong.</h2>
+        <p>Green is trees. Bright green is orchard plantation. Yellow is crops. Red is built-up. Photograph the disagreement.</p>
+      </div>
+    </section>
+
+    <section class="scene">
+      <div>
+        <div class="phone"><img src="screenshots/08-quick-capture.png" alt="Capture sheet with IndiaSAT agreement" /></div>
+        <p class="caption">+ · camera, then looks right / wrong class / not sure</p>
+      </div>
+      <div class="copy">
+        <h2>Validate the pixel.</h2>
+        <p>If IndiaSAT already named this spot, say whether it matches the ground. Pick the true class when you disagree. Save. The photo is the record; WMS can wait for signal.</p>
+      </div>
+    </section>
+
+    <section class="scene reverse">
+      <div>
+        <div class="phone"><img src="screenshots/11-field-log.png" alt="Field log export" /></div>
+        <p class="caption">Log · CSV with IndiaSAT class, agreement, tehsil</p>
+      </div>
+      <div class="copy">
+        <h2>Leave with a validation set.</h2>
+        <p>Lat, lon, IndiaSAT class, your call, photo. That is how a national layer learns a village.</p>
+      </div>
+    </section>
+
+    <footer class="fine">
+      Sulya, Dakshina Kannada. IndiaSAT via CoRE Stack GeoServer. Open this HTML in a browser if your editor hides images.
+    </footer>
+  </div>
+</body>
+</html>

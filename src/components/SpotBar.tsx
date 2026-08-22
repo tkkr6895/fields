@@ -5,9 +5,10 @@ interface SpotBarProps {
   focusLocation: LocationData | null;
   placeLabel?: string | null;
   pendingEnrichment?: number;
+  indiaSatClass?: { name: string; color: string; classId: number } | null;
 }
 
-const SpotBar: React.FC<SpotBarProps> = ({ focusLocation, placeLabel, pendingEnrichment = 0 }) => {
+const SpotBar: React.FC<SpotBarProps> = ({ focusLocation, placeLabel, pendingEnrichment = 0, indiaSatClass }) => {
   if (!focusLocation) {
     return (
       <div className="prediction-card prediction-card--empty">
@@ -28,6 +29,12 @@ const SpotBar: React.FC<SpotBarProps> = ({ focusLocation, placeLabel, pendingEnr
             ±{Math.round(focusLocation.accuracy || 0)} m · Tessera {tile.tileId}
             {pendingEnrichment > 0 ? ` · ${pendingEnrichment} filling in` : ''}
           </span>
+          {indiaSatClass && (
+            <span className="spot-class">
+              <span className="legend-swatch" style={{ background: indiaSatClass.color }} />
+              IndiaSAT: {indiaSatClass.name}
+            </span>
+          )}
         </div>
       </div>
     </div>

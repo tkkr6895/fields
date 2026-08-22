@@ -353,7 +353,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ onClose, onFlyTo, onAoiIm
           <div className="settings-section">
             <h3>Keys & live maps</h3>
             <p className="settings-description">
-              Stored only on this phone. CoRE Stack paints IndiaSAT land cover for the tehsil you are in. Tessera proxy is optional.
+              Stored only on this phone. CoRE Stack paints IndiaSAT and taluk facts. Tessera colour for Sulya is packed in the app; a proxy is only needed for other tiles.
             </p>
             <label style={{ color: '#aaa', fontSize: 12, display: 'block', marginBottom: 4 }}>CoRE Stack API key</label>
             <input

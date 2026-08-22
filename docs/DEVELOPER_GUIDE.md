@@ -21,7 +21,7 @@ npm run dev
 
 Open http://localhost:5173. For a phone-shaped window use Chrome DevTools → Toggle device toolbar → 390×844.
 
-Settings → **Before you go out** to search a place or import GeoJSON/KML/CSV. Worked examples: [example-flows/](../example-flows/).
+Worked examples: [IndiaSAT validation](../example-flows/01-indiasat-validation.html) and [Tessera tree species](../example-flows/02-tessera-tree-species.html).
 
 ## Environment
 

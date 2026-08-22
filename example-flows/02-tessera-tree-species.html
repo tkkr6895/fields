@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Tessera tree species — Fields</title>
+  <link rel="stylesheet" href="story.css" />
+</head>
+<body>
+  <div class="wrap">
+    <nav class="top">
+      <a href="index.html">Both flows</a>
+      <a href="01-indiasat-validation.html">IndiaSAT · validation</a>
+    </nav>
+    <p class="kicker">Flow 2 · Tessera tree species</p>
+    <h1>Name the tree.<br />Colour is a fingerprint, not a class.</h1>
+    <p class="lede">
+      Tessera embeddings are 128 numbers per 10&nbsp;m cell. The phone never downloads that tensor.
+      It paints a <strong>3-band RGB fingerprint</strong> (embedding bands 30, 60, 90) for the single 0.1° tile under you — magenta and cyan, not IndiaSAT’s green/yellow/red legend.
+      Similar colour ≈ similar landscape. You supply the species name.
+    </p>
+    <p class="pull">Sulya’s four tiles are packed in the app (~75&nbsp;KB each). Other tiles need signal and the Tessera proxy.</p>
+
+    <section class="scene">
+      <div>
+        <div class="phone"><img src="screenshots/01-map-home.png" alt="Tessera tile id on the spot bar" /></div>
+        <p class="caption">Always on the spot bar: Tessera grid_75.35_12.55</p>
+      </div>
+      <div class="copy">
+        <h2>The join key is free.</h2>
+        <p>GPS snaps to Tessera’s 0.1° grid. That id is written on every save, even offline. Colour is optional.</p>
+      </div>
+    </section>
+
+    <section class="scene reverse">
+      <div>
+        <div class="phone"><img src="screenshots/04-aoi-imported.png" alt="Sulya AOI imported" /></div>
+        <p class="caption">Import the trial landscape (or your compartments)</p>
+      </div>
+      <div class="copy">
+        <h2>Pack the walk, not the embeddings.</h2>
+        <p>The packed colour covers the Sulya polygon. Off that box, use a proxy or collect ids only.</p>
+      </div>
+    </section>
+
+    <section class="scene">
+      <div>
+        <div class="phone"><img src="screenshots/12-tessera-colour.png" alt="Tessera RGB fingerprint over Sulya" /></div>
+        <p class="caption">Tessera landscape colour · noisy RGB, not land-cover classes</p>
+      </div>
+      <div class="copy">
+        <h2>Turn on landscape colour.</h2>
+        <p>Maps → <strong>Tessera landscape colour</strong>. IndiaSAT switches off. Photograph where the fingerprint changes — ridge, estate edge, river.</p>
+      </div>
+    </section>
+
+    <section class="scene reverse">
+      <div>
+        <div class="phone"><img src="screenshots/09-capture-named.png" alt="Hopea parviflora, native forest" /></div>
+        <p class="caption">Species + native / plantation / mixed. Tile id rides along.</p>
+      </div>
+      <div class="copy">
+        <h2>Three taps of truth.</h2>
+        <p>Photograph the bole or leaf. Name it if you can. Save. IndexedDB holds GPS, photo, <code>tessera_tile_id</code>, year 2024.</p>
+      </div>
+    </section>
+
+    <section class="scene">
+      <div>
+        <div class="phone"><img src="screenshots/11-field-log.png" alt="Export with tessera_tile_id" /></div>
+        <p class="caption">CSV · tessera_tile_id, species, stand type</p>
+      </div>
+      <div class="copy">
+        <h2>Join 10&nbsp;m cells on a computer.</h2>
+        <p>Download those Tessera tiles, sample the cell at each GPS, train a species head. The phone was the label factory.</p>
+      </div>
+    </section>
+
+    <footer class="fine">
+      Tessera: Feng et al. · bands 30/60/90 as RGB · Sulya, Dakshina Kannada.
+    </footer>
+  </div>
+</body>
+</html>

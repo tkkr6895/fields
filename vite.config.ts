@@ -15,9 +15,9 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'mask-icon.svg'],
       manifest: {
-        name: 'WG Field Validator',
-        short_name: 'WGValidator',
-        description: 'Offline-first field validation for Western Ghats datasets',
+        name: 'Fields',
+        short_name: 'Fields',
+        description: 'Ground notes for land cover, trees, and geospatial models',
         theme_color: '#1a1a2e',
         background_color: '#0f0f1a',
         display: 'standalone',
@@ -102,6 +102,11 @@ export default defineConfig({
         target: 'http://localhost:8787',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api\/dw/, '')
+      },
+      '/api/tessera': {
+        target: 'http://localhost:8788',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/tessera/, '')
       }
     }
   }

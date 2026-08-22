@@ -9,6 +9,8 @@
 import { db, dbReady, enqueueSyncItem, dequeueSyncItems, updateSyncQueueItem, purgeSyncQueue, getSyncQueueStats } from '../db/database';
 import { weatherService } from './WeatherService';
 import { dynamicWorldService } from './DynamicWorldService';
+import { tesseraService } from './TesseraService';
+import { coreStackService } from './CoreStackService';
 import type { SyncQueueItem, DatasetValues } from '../types';
 
 // ─── Public types ──────────────────────────────────────────────────
@@ -140,6 +142,41 @@ class SyncEngine {
       console.warn('[SyncEngine] Dynamic World enrichment failed:', e);
       enrichedData['dw_data_type'] = 'ERROR';
       enrichedData['dw_note'] = e instanceof Error ? e.message : 'Failed to fetch land cover';
+    }
+
+    try {
+      const tessera = await tesseraService.fetchPointContext(lat, lon);
+      enrichedData['tessera_tile_id'] = tessera.tileId;
+      enrichedData['tessera_year'] = tessera.year;
+      enrichedData['tessera_coverage'] = tessera.coverage;
+      sources.push('tessera');
+      if (!obs.tessera) {
+        await db.observations.update(observationId, { tessera });
+      }
+    } catch (e) {
+      console.warn('[SyncEngine] Tessera enrichment failed:', e);
+    }
+
+    try {
+      const core = await coreStackService.loadAtPoint(lat, lon);
+      if (core.admin) {
+        enrichedData['corestack_state'] = core.admin.state;
+        enrichedData['corestack_district'] = core.admin.district;
+        enrichedData['corestack_tehsil'] = core.admin.tehsil;
+        sources.push('corestack');
+        await db.observations.update(observationId, {
+          coreStack: {
+            state: core.admin.state,
+            district: core.admin.district,
+            tehsil: core.admin.tehsil,
+            block: core.admin.block,
+            layerNames: core.layers.map(l => l.name),
+            kyl: core.kyl,
+          },
+        });
+      }
+    } catch (e) {
+      console.warn('[SyncEngine] CoRE Stack enrichment failed:', e);
     }
 
     // Save enriched data

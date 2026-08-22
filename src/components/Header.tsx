@@ -30,8 +30,8 @@ const Header: React.FC<HeaderProps> = ({ isOnline, syncStatus, onSettingsClick }
           </svg>
         </div>
         <div className="header-title">
-          <span className="title-main">WG Field Validator</span>
-          <span className="title-sub">Western Ghats Eco-Monitor</span>
+          <span className="title-main">Fields</span>
+          <span className="title-sub">Ground notes for maps</span>
         </div>
       </div>
       

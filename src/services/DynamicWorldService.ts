@@ -10,6 +10,8 @@
  * NO regional/aggregate statistics are shown - only actual point data.
  */
 
+import { getGeeProxyUrl } from './AppConfig';
+
 // Dynamic World land cover classes with metadata
 export const DW_CLASSES: Record<number, { name: string; color: string; description: string }> = {
   0: { name: 'Water', color: '#419BDF', description: 'Open water bodies, rivers, lakes' },
@@ -80,16 +82,7 @@ class DynamicWorldService {
   private mapIdCache: Map<string, DynamicWorldMapIdResponse> = new Map();
 
   private getProxyBaseUrl(): string | null {
-    // First check env var (for production or custom setup)
-    const v = (import.meta.env.VITE_DW_GEE_PROXY_URL || '').trim();
-    if (v.length > 0) return v;
-    
-    // In dev mode, use the Vite proxy
-    if (import.meta.env.DEV) {
-      return '/api/dw';
-    }
-    
-    return null;
+    return getGeeProxyUrl();
   }
 
   /**

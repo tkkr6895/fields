@@ -260,7 +260,7 @@ export async function exportToGeoJSON(observations: Observation[]): Promise<stri
       validation: obs.userValidation,
       notes: obs.notes,
       accuracy_m: obs.location.accuracy,
-      ...Object.entries(obs.datasetValues).reduce((acc, [layerId, values]) => {
+      ...Object.entries(obs.datasetValues || {}).reduce((acc, [layerId, values]) => {
         Object.entries(values).forEach(([field, value]) => {
           acc[`${layerId}_${field}`] = value;
         });
@@ -268,7 +268,9 @@ export async function exportToGeoJSON(observations: Observation[]): Promise<stri
       }, {} as Record<string, unknown>),
       ...(obs.predictionValidation ? { predictionValidation: obs.predictionValidation } : {}),
       ...(obs.fieldData ? { fieldData: obs.fieldData } : {}),
-      ...(obs.weather ? { weather: obs.weather } : {})
+      ...(obs.weather ? { weather: obs.weather } : {}),
+      ...(obs.tessera ? { tessera: obs.tessera } : {}),
+      ...(obs.coreStack ? { coreStack: obs.coreStack } : {}),
     }
   }));
 
@@ -284,7 +286,7 @@ export async function exportToCSV(observations: Observation[]): Promise<string> 
   // Collect all possible fields
   const allFields = new Set<string>();
   observations.forEach(obs => {
-    Object.entries(obs.datasetValues).forEach(([layerId, values]) => {
+    Object.entries(obs.datasetValues || {}).forEach(([layerId, values]) => {
       Object.keys(values).forEach(field => {
         allFields.add(`${layerId}_${field}`);
       });
@@ -292,18 +294,35 @@ export async function exportToCSV(observations: Observation[]): Promise<string> 
   });
 
   const headers = [
-    'id', 'timestamp', 'lat', 'lon', 'accuracy_m',
-    'validation', 'notes', ...Array.from(allFields),
-    'predictionValidation', 'fieldData', 'weather'
+    'id', 'timestamp', 'lat', 'lon', 'accuracy_m', 'altitude_m',
+    'observation_type', 'validation', 'notes', 'confidence', 'season',
+    'dw_class', 'dw_confidence', 'dw_agreement', 'dw_observer_class',
+    'indiasat_class', 'indiasat_confidence', 'indiasat_agreement', 'indiasat_observer_class',
+    'tessera_tile_id', 'tessera_year', 'tessera_coverage',
+    'cover_tree_pct', 'cover_shrub_pct', 'cover_grass_pct', 'cover_crop_pct',
+    'cover_water_pct', 'cover_built_pct', 'cover_bare_pct',
+    'dominant_species', 'forest_type', 'canopy_cover_pct',
+    'crop_type', 'weather_temp_c', 'weather_description',
+    'corestack_state', 'corestack_district', 'corestack_tehsil',
+    ...Array.from(allFields),
   ];
+
+  const coverPct = (obs: Observation, cover: string) =>
+    obs.fieldData?.coverComposition?.find(c => c.cover === cover)?.percent ?? '';
+
+  const srcVal = (obs: Observation, source: string) =>
+    obs.predictionValidation?.perSource.find(s => s.source === source);
 
   const rows = observations.map(obs => {
     const datasetCols: Record<string, string> = {};
-    Object.entries(obs.datasetValues).forEach(([layerId, values]) => {
+    Object.entries(obs.datasetValues || {}).forEach(([layerId, values]) => {
       Object.entries(values).forEach(([field, value]) => {
         datasetCols[`${layerId}_${field}`] = String(value ?? '');
       });
     });
+    const dw = srcVal(obs, 'dynamicworld');
+    const sat = srcVal(obs, 'indiasat');
+    const csvEscape = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
 
     return [
       obs.id,
@@ -311,12 +330,40 @@ export async function exportToCSV(observations: Observation[]): Promise<string> 
       obs.location.lat,
       obs.location.lon,
       obs.location.accuracy,
+      obs.location.altitude ?? '',
+      obs.observationType || '',
       obs.userValidation,
-      `"${obs.notes.replace(/"/g, '""')}"`,
+      csvEscape(obs.notes),
+      obs.confidence ?? '',
+      obs.season || '',
+      dw?.className ?? '',
+      dw?.confidence ?? '',
+      dw?.agreement ?? '',
+      dw?.observerClassName ?? '',
+      sat?.className ?? '',
+      sat?.confidence ?? '',
+      sat?.agreement ?? '',
+      sat?.observerClassName ?? '',
+      obs.tessera?.tileId ?? '',
+      obs.tessera?.year ?? '',
+      obs.tessera?.coverage ?? '',
+      coverPct(obs, 'tree'),
+      coverPct(obs, 'shrub'),
+      coverPct(obs, 'grass'),
+      coverPct(obs, 'crop'),
+      coverPct(obs, 'water'),
+      coverPct(obs, 'built'),
+      coverPct(obs, 'bare'),
+      csvEscape(obs.fieldData?.dominantSpecies),
+      obs.fieldData?.forest?.type ?? '',
+      obs.fieldData?.canopyCoverPercent ?? '',
+      csvEscape(obs.fieldData?.crop?.type),
+      obs.weather?.temperatureC ?? '',
+      csvEscape(obs.weather?.description),
+      obs.coreStack?.state ?? '',
+      obs.coreStack?.district ?? '',
+      obs.coreStack?.tehsil ?? '',
       ...Array.from(allFields).map(f => datasetCols[f] ?? ''),
-      obs.predictionValidation ? `"${JSON.stringify(obs.predictionValidation).replace(/"/g, '""')}"` : '',
-      obs.fieldData ? `"${JSON.stringify(obs.fieldData).replace(/"/g, '""')}"` : '',
-      obs.weather ? `"${JSON.stringify(obs.weather).replace(/"/g, '""')}"` : ''
     ].join(',');
   });
 

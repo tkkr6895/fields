@@ -2,7 +2,7 @@ import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
   appId: 'org.westernghats.fieldvalidator',
-  appName: 'WG Field Validator',
+  appName: 'Fields',
   webDir: 'dist',
   server: {
     // Use embedded assets, no external server needed

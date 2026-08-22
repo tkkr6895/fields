@@ -7,6 +7,7 @@ import FieldLog from './components/FieldLog';
 import SettingsPanel from './components/SettingsPanel';
 import PredictionCard from './components/PredictionCard';
 import ValidationCapture from './components/ValidationCapture';
+import Onboarding from './components/Onboarding';
 import { useNetworkStatus } from './hooks/useNetworkStatus';
 import { GeoLocationService } from './services/GeoLocationService';
 import { syncEngine } from './services/SyncEngine';
@@ -14,6 +15,9 @@ import { db } from './db/database';
 import { dynamicWorldService, DW_CLASSES } from './services/DynamicWorldService';
 import { indiaSatService, INDIASAT_CLASSES, INDIASAT_YEARS, type IndiaSATYear, LATEST_INDIASAT_YEAR } from './services/IndiaSATService';
 import { rasterLayerService } from './services/RasterLayerService';
+import { coreStackService } from './services/CoreStackService';
+import { tesseraTileForPoint } from './services/TesseraService';
+import { isFirstLaunchCompleted } from './services/DeviceService';
 import {
   fetchPredictionSnapshot,
   PREDICTION_SOURCES,
@@ -58,6 +62,11 @@ function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [captureOpen, setCaptureOpen] = useState(false);
   const [captureSnapshot, setCaptureSnapshot] = useState<PredictionSnapshot | null>(null);
+  const [showOnboarding, setShowOnboarding] = useState(() => !isFirstLaunchCompleted());
+  const [coreLayers, setCoreLayers] = useState<DatasetLayer[]>([]);
+  const [activeCoreLayers, setActiveCoreLayers] = useState<Set<string>>(new Set());
+  const [coreStatus, setCoreStatus] = useState<string | null>(null);
+  const [corePlace, setCorePlace] = useState<string | null>(null);
 
   // Location: GPS vs pinned (tapped on map)
   const [currentLocation, setCurrentLocation] = useState<LocationData | null>(null);
@@ -170,16 +179,20 @@ function App() {
         out.push(fl);
       }
     }
+    for (const cl of coreLayers) {
+      if (activeCoreLayers.has(cl.id)) out.push({ ...cl, enabled: true });
+    }
     return out;
-  }, [activeOverlays, indiasatTileUrl, indiasatYear, dwTileUrl, forestLayers, activeForestLayers]);
+  }, [activeOverlays, indiasatTileUrl, indiasatYear, dwTileUrl, forestLayers, activeForestLayers, coreLayers, activeCoreLayers]);
 
   const activeLayerIds = useMemo(() => {
     const s = new Set<string>();
     if (dwTileUrl && activeOverlays.has('dynamicworld')) s.add('dynamicworld_live');
     if (indiasatTileUrl && activeOverlays.has('indiasat')) s.add(`indiasat_${indiasatYear}`);
     for (const id of activeForestLayers) s.add(id);
+    for (const id of activeCoreLayers) s.add(id);
     return s;
-  }, [activeOverlays, indiasatYear, dwTileUrl, indiasatTileUrl, activeForestLayers]);
+  }, [activeOverlays, indiasatYear, dwTileUrl, indiasatTileUrl, activeForestLayers, activeCoreLayers]);
 
   // Map interactions
   const handleMapMove = useCallback((newCenter: [number, number], newZoom: number) => {
@@ -221,8 +234,37 @@ function App() {
     });
   }, []);
 
+  const handleCoreToggle = useCallback((layerId: string) => {
+    setActiveCoreLayers(prev => {
+      const next = new Set(prev);
+      if (next.has(layerId)) next.delete(layerId); else next.add(layerId);
+      return next;
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!focusLocation || !isOnline) return;
+    let cancelled = false;
+    setCoreStatus('Looking up CoRE Stack maps for this area…');
+    coreStackService.loadAtPoint(focusLocation.lat, focusLocation.lon).then(bundle => {
+      if (cancelled) return;
+      if (bundle.error) {
+        setCoreStatus(bundle.error);
+        setCoreLayers([]);
+        setCorePlace(null);
+        return;
+      }
+      const layers = coreStackService.toDatasetLayers(bundle.layers);
+      setCoreLayers(layers);
+      const place = [bundle.admin?.tehsil, bundle.admin?.district, bundle.admin?.state].filter(Boolean).join(', ');
+      setCorePlace(place || null);
+      setCoreStatus(layers.length ? `${layers.length} maps for ${place || 'this tehsil'}` : (place ? `No map layers listed for ${place}` : 'No CoRE Stack coverage here'));
+    });
+    return () => { cancelled = true; };
+  }, [focusLocation?.lat, focusLocation?.lon, isOnline]);
+
   // Validate from PredictionCard
-  const handleLaunchValidate = useCallback((snapshot: PredictionSnapshot) => {
+  const handleLaunchValidate = useCallback((snapshot: PredictionSnapshot | null) => {
     setCaptureSnapshot(snapshot);
     setCaptureOpen(true);
   }, []);
@@ -232,7 +274,7 @@ function App() {
     if (!loc) {
       const ok = await handleLocateMe();
       if (!ok) {
-        alert('Locate yourself first — we need GPS to anchor the validation.');
+        alert('Turn on location, or tap the map where you are standing.');
         return;
       }
       loc = currentLocation;
@@ -247,6 +289,7 @@ function App() {
 
   const handleObservationSubmit = useCallback(async (obs: Observation) => {
     await db.observations.add(obs);
+    await syncEngine.enqueue(obs.id);
     setPendingSync(p => p + 1);
     setTotalObs(p => p + 1);
     setCaptureOpen(false);
@@ -320,6 +363,12 @@ function App() {
             forestLayers={FOREST_LAYERS}
             activeForestLayers={activeForestLayers}
             onForestToggle={handleForestToggle}
+            coreLayers={coreLayers}
+            activeCoreLayers={activeCoreLayers}
+            onCoreToggle={handleCoreToggle}
+            coreStatus={coreStatus}
+            corePlace={corePlace}
+            tesseraHint={focusLocation ? tesseraTileForPoint(focusLocation.lat, focusLocation.lon).tileId : null}
             onClose={() => setActiveTab('map')}
           />
         )}
@@ -327,7 +376,7 @@ function App() {
         {activeTab === 'log' && (
           <div className="panel-overlay">
             <div className="panel-header">
-              <h2>Field log · {totalObs} observation{totalObs === 1 ? '' : 's'}</h2>
+              <h2>Field log · {totalObs} note{totalObs === 1 ? '' : 's'}</h2>
               <button className="panel-close" onClick={() => setActiveTab('map')}>✕</button>
             </div>
             <FieldLog onGoToLocation={handleGoToLocation} />
@@ -356,6 +405,7 @@ function App() {
       )}
 
       {settingsOpen && <SettingsPanel onClose={() => setSettingsOpen(false)} />}
+      {showOnboarding && <Onboarding onDone={() => setShowOnboarding(false)} />}
     </div>
   );
 }
@@ -363,7 +413,7 @@ function App() {
 // Hint compiler to keep DynamicWorldService side imports tree-shake friendly
 void dynamicWorldService;
 
-/** Overlay control surface — toggles each model raster + legend. */
+/** Overlay control surface — map layers in plain language. */
 const OverlayPanel: React.FC<{
   activeOverlays: Set<OverlayId>;
   indiasatYear: IndiaSATYear;
@@ -375,28 +425,38 @@ const OverlayPanel: React.FC<{
   forestLayers: readonly { id: string; label: string; color: string }[];
   activeForestLayers: Set<string>;
   onForestToggle: (id: string) => void;
+  coreLayers: DatasetLayer[];
+  activeCoreLayers: Set<string>;
+  onCoreToggle: (id: string) => void;
+  coreStatus: string | null;
+  corePlace: string | null;
+  tesseraHint: string | null;
   onClose: () => void;
-}> = ({ activeOverlays, indiasatYear, indiasatTileError, dwTileError, isOnline, onToggle, onYearChange, forestLayers, activeForestLayers, onForestToggle, onClose }) => {
+}> = ({
+  activeOverlays, indiasatYear, indiasatTileError, dwTileError, isOnline, onToggle, onYearChange,
+  forestLayers, activeForestLayers, onForestToggle, coreLayers, activeCoreLayers, onCoreToggle,
+  coreStatus, corePlace, tesseraHint, onClose,
+}) => {
   return (
     <div className="panel-overlay">
       <div className="panel-header">
-        <h2>LULC overlays</h2>
+        <h2>Map layers</h2>
         <button className="panel-close" onClick={onClose}>✕</button>
       </div>
       <div className="overlay-content">
+        <p className="overlay-lede">Turn layers on to colour the map. They are satellite guesses — your notes are the ground truth.</p>
         <section className="overlay-card">
           <header>
             <div>
-              <strong>{PREDICTION_SOURCES.dynamicworld.title}</strong>
-              <small>{PREDICTION_SOURCES.dynamicworld.description}</small>
-              <small>{PREDICTION_SOURCES.dynamicworld.resolution} · {PREDICTION_SOURCES.dynamicworld.temporal}</small>
+              <strong>Live satellite cover</strong>
+              <small>Dynamic World · what Sentinel-2 thinks this pixel is right now</small>
             </div>
             <label className="switch">
               <input type="checkbox" checked={activeOverlays.has('dynamicworld')} onChange={() => onToggle('dynamicworld')} disabled={!isOnline} />
               <span />
             </label>
           </header>
-          {!isOnline && <p className="overlay-warn">Offline — live tiles unavailable.</p>}
+          {!isOnline && <p className="overlay-warn">Offline — live colouring needs a connection.</p>}
           {dwTileError && <p className="overlay-warn">{dwTileError}</p>}
           {activeOverlays.has('dynamicworld') && (
             <ul className="legend">
@@ -413,9 +473,8 @@ const OverlayPanel: React.FC<{
         <section className="overlay-card">
           <header>
             <div>
-              <strong>{PREDICTION_SOURCES.indiasat.title}</strong>
-              <small>{PREDICTION_SOURCES.indiasat.description}</small>
-              <small>{PREDICTION_SOURCES.indiasat.resolution} · {PREDICTION_SOURCES.indiasat.temporal}</small>
+              <strong>India land cover (CoRE Stack)</strong>
+              <small>IndiaSAT annual map used across the CoRE Stack</small>
             </div>
             <label className="switch">
               <input type="checkbox" checked={activeOverlays.has('indiasat')} onChange={() => onToggle('indiasat')} disabled={!isOnline} />
@@ -445,19 +504,43 @@ const OverlayPanel: React.FC<{
         <section className="overlay-card">
           <header>
             <div>
-              <strong>🌳 Forest vs. Plantation</strong>
-              <small>Google Research · Natural Forest 2020 (10 m)</small>
-              <small>AI-based separation of natural forests from tree plantations</small>
+              <strong>Tessera landscape fingerprint</strong>
+              <small>Cambridge Tessera embeddings (10 m). Too large to paint the whole globe on a phone — we save the tile id with every note so you can join labels to embeddings on a computer.</small>
+              {tesseraHint && <small>This spot → {tesseraHint}</small>}
+            </div>
+          </header>
+        </section>
+
+        <section className="overlay-card">
+          <header>
+            <div>
+              <strong>CoRE Stack maps for this area</strong>
+              <small>{corePlace || 'Stand on the map or tap a point first'}</small>
+              {coreStatus && <small>{coreStatus}</small>}
+            </div>
+          </header>
+          <div className="forest-layer-list">
+            {coreLayers.length === 0 && <p className="overlay-warn">Add your CoRE Stack API key in Settings to load drainage, water, crops, and village maps for the tehsil you are in.</p>}
+            {coreLayers.map(cl => (
+              <label key={cl.id} className="forest-layer-toggle">
+                <input type="checkbox" checked={activeCoreLayers.has(cl.id)} onChange={() => onCoreToggle(cl.id)} />
+                <span>{cl.title}</span>
+              </label>
+            ))}
+          </div>
+        </section>
+
+        <section className="overlay-card">
+          <header>
+            <div>
+              <strong>Forest vs plantation</strong>
+              <small>Google Research Natural Forest 2020 — bundled for the Western Ghats pack</small>
             </div>
           </header>
           <div className="forest-layer-list">
             {forestLayers.map(fl => (
               <label key={fl.id} className="forest-layer-toggle">
-                <input
-                  type="checkbox"
-                  checked={activeForestLayers.has(fl.id)}
-                  onChange={() => onForestToggle(fl.id)}
-                />
+                <input type="checkbox" checked={activeForestLayers.has(fl.id)} onChange={() => onForestToggle(fl.id)} />
                 <span className="legend-swatch" style={{ background: fl.color }} />
                 <span>{fl.label}</span>
               </label>
@@ -468,9 +551,8 @@ const OverlayPanel: React.FC<{
         <section className="overlay-attribution">
           <small>
             Sources: <a href={PREDICTION_SOURCES.dynamicworld.providerUrl} target="_blank" rel="noreferrer">Dynamic World</a>{' · '}
-            <a href={PREDICTION_SOURCES.indiasat.providerUrl} target="_blank" rel="noreferrer">IndiaSAT LULC (CoRE Stack)</a>{' · '}
-            <a href="https://research.google/blog/separating-natural-forests-from-other-tree-cover-with-ai-for-deforestation-free-supply-chains/" target="_blank" rel="noreferrer">Natural Forest 2020 (Google Research)</a>.
-            Live predictions via Google Earth Engine proxy. Forest layers rendered from pre-computed 10 m classifications.
+            <a href={PREDICTION_SOURCES.indiasat.providerUrl} target="_blank" rel="noreferrer">IndiaSAT / CoRE Stack</a>{' · '}
+            <a href="https://github.com/ucam-eo/tessera" target="_blank" rel="noreferrer">Tessera</a>.
           </small>
         </section>
       </div>

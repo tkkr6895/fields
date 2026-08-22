@@ -169,6 +169,8 @@ export interface Observation {
   predictionValidation?: PredictionValidationRecord;
   fieldData?: LulcFieldData;
   weather?: WeatherSnapshot;
+  tessera?: TesseraObservationContext;
+  coreStack?: CoreStackObservationContext;
 }
 
 /**
@@ -179,7 +181,7 @@ export interface Observation {
 export interface PredictionValidationRecord {
   capturedAt: string;
   perSource: Array<{
-    source: 'dynamicworld' | 'indiasat';
+    source: 'dynamicworld' | 'indiasat' | 'tessera';
     classId: number;
     className: string;
     classColor: string;
@@ -234,6 +236,29 @@ export interface LulcFieldData {
   fieldConfidence?: number;
   /** Free-form qualitative notes. */
   qualitativeNotes?: string;
+}
+
+/** Tessera tile + optional embedding fingerprint captured with the observation. */
+export interface TesseraObservationContext {
+  year: number;
+  tileId: string;
+  tileLon: number;
+  tileLat: number;
+  coverage: 'sampled' | 'tile_known' | 'missing' | 'unknown';
+  source: 'proxy' | 'grid';
+  embeddingDim?: number;
+  embeddingPreview?: number[];
+  pcaRgb?: [number, number, number];
+  note?: string;
+}
+
+export interface CoreStackObservationContext {
+  state?: string;
+  district?: string;
+  tehsil?: string;
+  block?: string;
+  layerNames?: string[];
+  kyl?: Record<string, unknown> | null;
 }
 
 /** v3 — Weather captured automatically at observation time (Open-Meteo). */

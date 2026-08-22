@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/tkkr6895/fields/docs/schemas/training_pipeline_schema.json",
+  "title": "Fields observation for GeoAI / Tessera training",
+  "type": "object",
+  "required": ["id", "timestamp", "location"],
+  "properties": {
+    "id": { "type": "string" },
+    "timestamp": { "type": "string", "format": "date-time" },
+    "location": {
+      "type": "object",
+      "required": ["lat", "lon"],
+      "properties": {
+        "lat": { "type": "number" },
+        "lon": { "type": "number" },
+        "accuracy": { "type": "number" }
+      }
+    },
+    "observationType": { "type": "string" },
+    "notes": { "type": "string" },
+    "fieldData": { "type": "object" },
+    "predictionValidation": { "type": "object" },
+    "tessera": {
+      "type": "object",
+      "properties": {
+        "year": { "type": "integer" },
+        "tileId": { "type": "string" },
+        "tileLon": { "type": "number" },
+        "tileLat": { "type": "number" },
+        "coverage": { "type": "string" },
+        "embeddingPreview": {
+          "type": "array",
+          "items": { "type": "number" }
+        }
+      }
+    },
+    "coreStack": { "type": "object" },
+    "weather": { "type": "object" }
+  }
+}

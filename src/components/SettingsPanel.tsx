@@ -10,6 +10,14 @@ import {
   isFirstLaunchCompleted,
   completeFirstLaunch,
 } from '../services/DeviceService';
+import {
+  getCoreStackApiKey,
+  setCoreStackApiKey,
+  getGeeProxyUrl,
+  setGeeProxyUrl,
+  getTesseraProxyUrl,
+  setTesseraProxyUrl,
+} from '../services/AppConfig';
 
 // Injected by Vite at build time via define config
 declare const __APP_VERSION__: string;
@@ -51,6 +59,10 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ onClose }) => {
     parseInt(localStorage.getItem('fields_default_zoom') || '8')
   );
   const [mapPrefsSaved, setMapPrefsSaved] = useState(false);
+  const [coreKey, setCoreKey] = useState(getCoreStackApiKey());
+  const [geeUrl, setGeeUrl] = useState(getGeeProxyUrl() || '');
+  const [tesseraUrl, setTesseraUrl] = useState(getTesseraProxyUrl() || '');
+  const [connSaved, setConnSaved] = useState(false);
 
   useEffect(() => {
     // Check DW status
@@ -278,6 +290,53 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ onClose }) => {
             </div>
           </div>
 
+          <div className="settings-section">
+            <h3>Keys & live maps</h3>
+            <p className="settings-description">
+              Stored only on this phone. Needed so live Dynamic World / IndiaSAT colouring and CoRE Stack maps work in the installed app.
+            </p>
+            <label style={{ color: '#aaa', fontSize: 12, display: 'block', marginBottom: 4 }}>CoRE Stack API key</label>
+            <input
+              type="password"
+              value={coreKey}
+              onChange={(e) => setCoreKey(e.target.value)}
+              placeholder="from core-stack.org/use-apis"
+              className="settings-input"
+              style={{ width: '100%', marginBottom: 10, boxSizing: 'border-box' }}
+            />
+            <label style={{ color: '#aaa', fontSize: 12, display: 'block', marginBottom: 4 }}>Earth Engine proxy URL</label>
+            <input
+              type="url"
+              value={geeUrl}
+              onChange={(e) => setGeeUrl(e.target.value)}
+              placeholder="https://your-gee-proxy.example.com"
+              className="settings-input"
+              style={{ width: '100%', marginBottom: 10, boxSizing: 'border-box' }}
+            />
+            <label style={{ color: '#aaa', fontSize: 12, display: 'block', marginBottom: 4 }}>Tessera proxy URL (optional)</label>
+            <input
+              type="url"
+              value={tesseraUrl}
+              onChange={(e) => setTesseraUrl(e.target.value)}
+              placeholder="https://your-tessera-proxy.example.com"
+              className="settings-input"
+              style={{ width: '100%', marginBottom: 10, boxSizing: 'border-box' }}
+            />
+            <button
+              onClick={() => {
+                setCoreStackApiKey(coreKey);
+                setGeeProxyUrl(geeUrl);
+                setTesseraProxyUrl(tesseraUrl);
+                setConnSaved(true);
+                setTimeout(() => setConnSaved(false), 2000);
+              }}
+              className="settings-btn primary"
+            >
+              Save connections
+            </button>
+            {connSaved && <span className="settings-saved"> Saved</span>}
+          </div>
+
           {/* Dynamic World Status */}
           <div className="settings-section">
             <h3>🗺️ Dynamic World Land Cover</h3>
@@ -425,8 +484,8 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ onClose }) => {
           <div className="settings-section">
             <h3>ℹ️ About</h3>
             <div className="settings-info">
-              <p><strong>WG Field Validator</strong></p>
-              <p>Western Ghats landscape intelligence & field data collection tool.</p>
+              <p><strong>Fields</strong></p>
+              <p>Ground notes for land-cover, tree, and CoRE Stack validation.</p>
               <p className="settings-version">Version {__APP_VERSION__}</p>
             </div>
           </div>

@@ -32,14 +32,14 @@ const BottomNav: React.FC<BottomNavProps> = ({
         <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor">
           <path d="M11.99 18.54l-7.37-5.73L3 14.07l9 7 9-7-1.63-1.27-7.38 5.74zM12 16l7.36-5.73L21 9l-9-7-9 7 1.63 1.27L12 16z"/>
         </svg>
-        <span>Overlays</span>
+        <span>Maps</span>
       </button>
 
       {/* Central Capture Button */}
       <button 
         className="nav-capture-btn"
         onClick={onCaptureClick}
-        title="Validate this spot"
+        title="Record this spot"
       >
         <svg viewBox="0 0 24 24" width="28" height="28" fill="currentColor">
           <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm5 11h-4v4h-2v-4H7v-2h4V7h2v4h4v2z"/>

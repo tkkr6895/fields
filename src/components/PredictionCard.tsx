@@ -24,7 +24,7 @@ import type { LocationData } from '../types';
 interface PredictionCardProps {
   focusLocation: LocationData | null;
   isOnline: boolean;
-  onValidate: (snapshot: PredictionSnapshot) => void;
+  onValidate: (snapshot: PredictionSnapshot | null) => void;
   /** Optional callback so the user can choose a different IndiaSAT year. */
   onYearChange?: (year: IndiaSATYear) => void;
   /** Hide the heavy raster toggles if the parent owns layer state. */
@@ -166,15 +166,15 @@ const PredictionCard: React.FC<PredictionCardProps> = ({ focusLocation, isOnline
   }, [onYearChange]);
 
   const launchValidate = useCallback(() => {
-    if (snapshot) onValidate(snapshot);
+    onValidate(snapshot);
   }, [snapshot, onValidate]);
 
   if (!focusLocation) {
     return (
       <div className={`prediction-card prediction-card--empty ${className || ''}`}>
         <div className="prediction-card__lede">
-          <strong>Locate yourself to begin</strong>
-          <span>Tap <em>Locate me</em> or pick any point on the map to see what the models think.</span>
+          <strong>Find your spot</strong>
+          <span>Tap Locate me (crosshair) or tap anywhere on the map. Then we’ll show what the satellites think this place is.</span>
         </div>
       </div>
     );
@@ -187,7 +187,7 @@ const PredictionCard: React.FC<PredictionCardProps> = ({ focusLocation, isOnline
           <span className="dot" />
         </button>
         <div className="prediction-card__loc">
-          <strong>Here</strong>
+          <strong>This spot</strong>
           <span>{formatLocation(focusLocation)}</span>
         </div>
         <div className="prediction-card__years">
@@ -211,13 +211,32 @@ const PredictionCard: React.FC<PredictionCardProps> = ({ focusLocation, isOnline
           <div className="prediction-card__rows">
             <PredictionRow source="dynamicworld" result={snapshot?.results.dynamicworld ?? null} error={snapshot?.errors.dynamicworld} />
             <PredictionRow source="indiasat" result={snapshot?.results.indiasat ?? null} error={snapshot?.errors.indiasat} />
+            {snapshot?.tessera && (
+              <div className="pred-row">
+                <div className="pred-row__head">
+                  <span className="pred-row__title">Tessera</span>
+                  <span className="pred-row__meta">10 m embedding · {snapshot.tessera.year}</span>
+                </div>
+                <div className="pred-row__class">
+                  {snapshot.tessera.pcaRgb && (
+                    <span className="pred-swatch" style={{ background: `rgb(${snapshot.tessera.pcaRgb.join(',')})` }} />
+                  )}
+                  <span className="pred-row__class-name">{snapshot.tessera.tileId}</span>
+                </div>
+                <div className="pred-row__note">
+                  {snapshot.tessera.coverage === 'sampled'
+                    ? 'Fingerprint sampled — saved with your note for species / LULC training.'
+                    : 'Tile id saved with your note so it can join Tessera embeddings later.'}
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="prediction-card__actions">
-            <button className="btn btn--primary" disabled={!snapshot || loading} onClick={launchValidate}>
-              {loading ? 'Loading predictions…' : 'Validate this spot'}
+            <button className="btn btn--primary" disabled={loading} onClick={launchValidate}>
+              {loading ? 'Looking up maps…' : 'Record what you see'}
             </button>
-            {!isOnline && <span className="prediction-card__hint">Offline · live predictions paused. Cached data only.</span>}
+            {!isOnline && <span className="prediction-card__hint">You’re offline. You can still record notes; live maps pause.</span>}
           </div>
 
           <div className="prediction-card__footer">

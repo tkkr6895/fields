@@ -200,6 +200,8 @@ class AnnotationExporter {
           ...(obs.predictionValidation ? { 'fields:prediction_validation': obs.predictionValidation } : {}),
           ...(obs.fieldData ? { 'fields:field_data': obs.fieldData } : {}),
           ...(obs.weather ? { 'fields:weather': obs.weather } : {}),
+          ...(obs.tessera ? { 'fields:tessera': obs.tessera } : {}),
+          ...(obs.coreStack ? { 'fields:corestack': obs.coreStack } : {}),
           // Vector feature context (for ground-truthing vector datasets)
           ...(obs.vectorFeatureContext ? {
             'fields:vector_layer_id': obs.vectorFeatureContext.layerId,
@@ -322,7 +324,7 @@ class AnnotationExporter {
       model_details: {
         name: 'Fields Ground-Truth Dataset',
         version: typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '1.0.0',
-        description: 'Crowd-sourced ground-truth observations for LULC validation in the Western Ghats',
+        description: 'Crowd-sourced ground-truth observations for LULC, species, Tessera, and CoRE Stack validation',
         license: 'CC-BY-4.0',
       },
       dataset: {

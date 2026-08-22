@@ -17,6 +17,7 @@ import {
   LATEST_INDIASAT_YEAR,
   type IndiaSATYear,
 } from '../services/IndiaSATService';
+import { tesseraService, type TesseraPointContext } from '../services/TesseraService';
 
 export type PredictionSourceId = 'dynamicworld' | 'indiasat';
 
@@ -84,6 +85,7 @@ export interface PredictionSnapshot {
   results: Partial<Record<PredictionSourceId, PredictionResult | null>>;
   /** Per-source error message when the call failed. */
   errors: Partial<Record<PredictionSourceId, string>>;
+  tessera?: TesseraPointContext | null;
 }
 
 function dwClassColor(classId: number): string {
@@ -154,6 +156,12 @@ export async function fetchPredictionSnapshot(lat: number, lon: number, opts?: {
       .then(r => { results.indiasat = r; })
       .catch(e => { errors.indiasat = String(e?.message || e); })
   );
+  let tessera: TesseraPointContext | null = null;
+  tasks.push(
+    tesseraService.fetchPointContext(lat, lon)
+      .then(r => { tessera = r; })
+      .catch(() => { tessera = null; })
+  );
   await Promise.all(tasks);
-  return { lat, lon, fetchedAt, results, errors };
+  return { lat, lon, fetchedAt, results, errors, tessera };
 }

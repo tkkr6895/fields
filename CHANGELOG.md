@@ -4,6 +4,21 @@ All notable changes to the Fields app are documented in this file.
 
 ---
 
+## [1.1.0] — 2026-08-22: Field-ready Tessera + CoRE Stack notes
+
+Ground-first capture for people who are not GIS users. Load Dynamic World, IndiaSAT (CoRE Stack LULC), and CoRE Stack tehsil maps; record land cover, tree type, and notes that join to Tessera tiles.
+
+- **Onboarding** in plain language; app branded **Fields**.
+- **Capture**: what you see first (cover chips, tree type, GBIF name hints, photo optional). Map agreement is a second, skippable step.
+- **Tessera**: every observation stores the 0.1° tile id; optional `server/tessera-proxy.py` samples embeddings.
+- **CoRE Stack**: admin lookup + WMS layers for the current tehsil when an API key is set.
+- **Settings**: CoRE Stack key, Earth Engine proxy URL, Tessera proxy URL on-device (so the APK can be pointed at your servers).
+- **Export CSV/STAC/GeoJSON** flatten validation, Tessera, cover fractions, species, weather.
+- **GitHub Actions** artifact `fields-debug`; `npx cap sync android` before assemble.
+- Docs trimmed; clone path is the repo root (not `fields/field-validator-app`).
+
+---
+
 ## [0.4.0] — 2025-06-07: Vector Data Inspection, GBIF & PBR Standards
 
 ### Summary

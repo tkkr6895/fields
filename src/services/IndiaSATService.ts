@@ -15,6 +15,8 @@
  * used for Dynamic World also unlocks IndiaSAT.
  */
 
+import { getGeeProxyUrl } from './AppConfig';
+
 export const INDIASAT_CLASSES: Record<number, { name: string; color: string; description: string; group: 'built' | 'water' | 'crops' | 'trees' | 'barren' | 'shrubs' | 'orchard' | 'other' }> = {
   0:  { name: 'Background',                          color: '#000000', group: 'other',   description: 'No-data / masked' },
   1:  { name: 'Built up',                            color: '#ff0000', group: 'built',   description: 'Settlements, roads, impervious surfaces' },
@@ -62,10 +64,7 @@ class IndiaSATService {
   private mapIdCache = new Map<number, IndiaSATMapIdResponse>();
 
   private getProxyBaseUrl(): string | null {
-    const v = (import.meta.env.VITE_DW_GEE_PROXY_URL || '').trim();
-    if (v.length > 0) return v;
-    if (import.meta.env.DEV) return '/api/dw';
-    return null;
+    return getGeeProxyUrl();
   }
 
   isAvailable(): boolean {

@@ -5,6 +5,9 @@
   "repository": "github:tkkr6895/fields",
   "homepage": "https://github.com/tkkr6895/fields#readme",
   "type": "module",
+  "engines": {
+    "node": ">=22.0.0"
+  },
   "scripts": {
     "dev": "vite",
     "dev:tessera-proxy": "python3 server/tessera-proxy.py",

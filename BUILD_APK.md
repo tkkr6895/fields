@@ -19,7 +19,7 @@ On the phone: allow installs from unknown sources, install, grant location and c
 
 ## Local
 
-Needs JDK 21 and Android SDK.
+Needs Node.js 22+, JDK 21 and Android SDK.
 
 ```bash
 npm install

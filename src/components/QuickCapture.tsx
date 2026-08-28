@@ -1,6 +1,6 @@
 /**
- * Photo-first tree / land-cover note. Save is local and immediate.
- * IndiaSAT, weather, GBIF, CoRE admin attach later via SyncEngine.
+ * Photo / tag note. Save is local and immediate.
+ * During a hike, photo is optional so you can drop a waypoint without stopping.
  */
 
 import { useState, useCallback, useEffect, useRef } from 'react';
@@ -17,11 +17,29 @@ import type { LocationData, Observation, ImageData } from '../types';
 interface QuickCaptureProps {
   focusLocation: LocationData | null;
   indiaSatHint?: { name: string; color: string; classId: number } | null;
+  autoCamera?: boolean;
+  trackId?: string | null;
   onSubmit: (obs: Observation) => void | Promise<void>;
   onClose: () => void;
 }
 
-const QuickCapture: React.FC<QuickCaptureProps> = ({ focusLocation, indiaSatHint, onSubmit, onClose }) => {
+const TAGS = [
+  ['tree', 'Tree'],
+  ['species', 'Species'],
+  ['water', 'Water'],
+  ['crop', 'Crop'],
+  ['built', 'Built'],
+  ['trail', 'Trail'],
+] as const;
+
+const QuickCapture: React.FC<QuickCaptureProps> = ({
+  focusLocation,
+  indiaSatHint,
+  autoCamera = true,
+  trackId,
+  onSubmit,
+  onClose,
+}) => {
   const [location, setLocation] = useState<LocationData | null>(focusLocation);
   const [imageData, setImageData] = useState<ImageData | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
@@ -34,13 +52,12 @@ const QuickCapture: React.FC<QuickCaptureProps> = ({ focusLocation, indiaSatHint
   const [indiaAgree, setIndiaAgree] = useState<'agree' | 'disagree' | 'unsure' | 'unrated'>('unrated');
   const [observerClassId, setObserverClassId] = useState<number | undefined>();
   const [more, setMore] = useState(false);
+  const [tags, setTags] = useState<string[]>(trackId ? ['trail'] : []);
   const [hints, setHints] = useState<GBIFSpeciesSuggestion[]>([]);
   const hintTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    if (focusLocation) return;
-    const svc = new GeoLocationService();
-    svc.getCurrentPosition().then(setLocation).catch(() => undefined);
+    if (focusLocation) setLocation(focusLocation);
   }, [focusLocation]);
 
   const takePhoto = useCallback(async (mode: 'camera' | 'gallery') => {
@@ -63,9 +80,8 @@ const QuickCapture: React.FC<QuickCaptureProps> = ({ focusLocation, indiaSatHint
   }, []);
 
   useEffect(() => {
-    takePhoto('camera');
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    if (autoCamera) void takePhoto('camera');
+  }, [autoCamera, takePhoto]);
 
   useEffect(() => {
     if (hintTimer.current) clearTimeout(hintTimer.current);
@@ -80,6 +96,10 @@ const QuickCapture: React.FC<QuickCaptureProps> = ({ focusLocation, indiaSatHint
     return () => { if (hintTimer.current) clearTimeout(hintTimer.current); };
   }, [species]);
 
+  const toggleTag = (id: string) => {
+    setTags((prev) => prev.includes(id) ? prev.filter(t => t !== id) : [...prev, id]);
+  };
+
   const save = async () => {
     const loc = location;
     if (!loc) {
@@ -93,6 +113,7 @@ const QuickCapture: React.FC<QuickCaptureProps> = ({ focusLocation, indiaSatHint
       const tile = tesseraTileForPoint(loc.lat, loc.lon);
       const deviceId = getDeviceId();
       const forestType = stand;
+      const named = species.trim();
       const observation: Observation = {
         id: uuidv4(),
         timestamp: now,
@@ -100,23 +121,23 @@ const QuickCapture: React.FC<QuickCaptureProps> = ({ focusLocation, indiaSatHint
         context: { region: 'India', areaMode: 'point' },
         datasetValues: {},
         image: imageData || undefined,
-        userValidation: 'unclear',
+        userValidation: indiaAgree === 'agree' ? 'match' : indiaAgree === 'disagree' ? 'mismatch' : 'unclear',
         notes,
-        observationType: species.trim() ? 'species_sighting' : 'land_cover',
+        observationType: named ? 'species_sighting' : (trackId ? 'waypoint' : 'land_cover'),
         confidence: 4,
         season: deriveSeason(now),
         userId: getUserName() || deviceId,
         deviceId,
         synced: false,
         syncStatus: 'pending',
-        tags: ['tree-species-mapping'],
+        tags: [...new Set([...tags, ...(trackId ? ['on-track'] : [])])],
+        trackId: trackId || undefined,
         fieldData: {
-          dominantSpecies: species.trim() || undefined,
+          dominantSpecies: named || undefined,
           forest: forestType ? { type: forestType } : undefined,
           qualitativeNotes: notes,
-          coverComposition: [{ cover: 'tree', percent: 70 }],
         },
-        speciesData: species.trim() ? { speciesId: species.trim(), vernacularName: species.trim() } : undefined,
+        speciesData: named ? { speciesId: named, vernacularName: named } : undefined,
         predictionValidation: indiaSatHint ? {
           capturedAt: now,
           perSource: [{
@@ -152,37 +173,48 @@ const QuickCapture: React.FC<QuickCaptureProps> = ({ focusLocation, indiaSatHint
   };
 
   return (
-    <div className="vc-overlay" role="dialog" aria-modal="true">
+    <div className="vc-overlay" role="dialog" aria-modal="true" aria-labelledby="note-title">
       <div className="vc-modal">
         <header className="vc-header">
           <button className="vc-close" onClick={onClose} aria-label="Close">✕</button>
           <div className="vc-steps">
-            <span className="active">Photo · tree note</span>
+            <span className="active" id="note-title">{trackId ? 'Mark this spot' : 'Photo · note'}</span>
           </div>
         </header>
         <main className="vc-body">
-          <p className="vc-help">Take the photo first. Maps fill in after you save, when you have signal.</p>
+          <p className="vc-help">
+            {trackId
+              ? 'Optional photo. A tag and a line of text are enough — GPS is already on the track.'
+              : 'Photograph if you can. Species, stand type, and a tag still save without a picture.'}
+          </p>
           <div className="vc-photo">
-            {preview ? <img src={preview} alt="Tree" className="vc-photo__preview" /> : <div className="vc-photo__placeholder">{busy ? 'Opening camera…' : 'No photo yet'}</div>}
+            {preview ? <img src={preview} alt="Field note" className="vc-photo__preview" /> : <div className="vc-photo__placeholder">{busy ? 'Opening camera…' : 'No photo — that is fine'}</div>}
             <div className="vc-photo__btns">
               <button className="btn" onClick={() => takePhoto('camera')} disabled={busy}>Camera</button>
               <button className="btn" onClick={() => takePhoto('gallery')} disabled={busy}>Gallery</button>
             </div>
             <small className="vc-loc">
-              {location ? `${location.lat.toFixed(5)}, ${location.lon.toFixed(5)}` : 'Waiting for GPS…'}
+              {location ? `${location.lat.toFixed(5)}, ${location.lon.toFixed(5)} · ±${Math.round(location.accuracy || 0)} m` : 'Waiting for GPS…'}
               {' · '}
               <button type="button" className="pred-row__toggle" onClick={async () => {
                 try {
                   const loc = await new GeoLocationService().getCurrentPosition();
                   setLocation(loc);
                 } catch {
-                  setError('Could not get GPS. Tap the map first, then open + again.');
+                  setError('Could not get GPS. Tap the map first, then try again.');
                 }
               }}>Use GPS</button>
             </small>
           </div>
-          <label className="vc-field-label">What tree is this? (if you know)
-            <input value={species} onChange={(e) => setSpecies(e.target.value)} placeholder="Local name or scientific name" autoCapitalize="words" />
+          <div className="vc-gbif-chips" aria-label="Tags">
+            {TAGS.map(([id, label]) => (
+              <button type="button" key={id} className={`pill ${tags.includes(id) ? 'on' : ''}`} onClick={() => toggleTag(id)}>
+                {label}
+              </button>
+            ))}
+          </div>
+          <label className="vc-field-label">What is this? (if you know)
+            <input value={species} onChange={(e) => setSpecies(e.target.value)} placeholder="Tree name, crop, stream, trail fork…" autoCapitalize="words" />
           </label>
           {hints.length > 0 && (
             <div className="vc-gbif-chips">
@@ -228,14 +260,14 @@ const QuickCapture: React.FC<QuickCaptureProps> = ({ focusLocation, indiaSatHint
           </div>
           <button className="pred-row__toggle" type="button" onClick={() => setMore(m => !m)}>{more ? 'Hide notes' : 'Add a note'}</button>
           {more && (
-            <textarea rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Anything useful: flowering, logged, seedlings…" />
+            <textarea rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Flowering, logged, seedlings, trail condition…" />
           )}
           {error && <div className="vc-error">{error}</div>}
         </main>
         <footer className="vc-footer">
           <button className="btn" onClick={onClose}>Cancel</button>
           <button className="btn btn--primary" disabled={saving} onClick={save}>
-            {saving ? 'Saving…' : 'Save & keep walking'}
+            {saving ? 'Saving…' : 'Save'}
           </button>
         </footer>
       </div>

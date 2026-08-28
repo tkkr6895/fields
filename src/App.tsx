@@ -8,8 +8,10 @@ import SettingsPanel from './components/SettingsPanel';
 import SpotBar from './components/SpotBar';
 import QuickCapture from './components/QuickCapture';
 import Onboarding from './components/Onboarding';
+import TrackHud from './components/TrackHud';
 import { useNetworkStatus } from './hooks/useNetworkStatus';
 import { GeoLocationService } from './services/GeoLocationService';
+import { trackRecorder } from './services/TrackRecorder';
 import { syncEngine } from './services/SyncEngine';
 import { db } from './db/database';
 import { indiaSatService, INDIASAT_CLASSES, INDIASAT_YEARS, type IndiaSATYear, LATEST_INDIASAT_YEAR } from './services/IndiaSATService';
@@ -19,7 +21,7 @@ import { tesseraTileForPoint, resolveTesseraPreview, type TesseraPreview } from 
 import { customLayerManager } from './services/CustomLayerManager';
 import { isFirstLaunchCompleted } from './services/DeviceService';
 import { PREDICTION_SOURCES } from './services/PredictionService';
-import type { CustomLayer, LocationData, Observation, DatasetLayer } from './types';
+import type { CustomLayer, FieldTrack, LocationData, Observation, DatasetLayer } from './types';
 import './styles/global.css';
 import './styles/fields-app.css';
 
@@ -73,13 +75,13 @@ function App() {
   const [tesseraPreview, setTesseraPreview] = useState<TesseraPreview | null>(null);
   const [tesseraPreviewNote, setTesseraPreviewNote] = useState<string | null>(null);
   const [indiaSatClass, setIndiaSatClass] = useState<{ name: string; color: string; classId: number } | null>(null);
+  const [activeTrack, setActiveTrack] = useState<FieldTrack | null>(null);
 
   const [currentLocation, setCurrentLocation] = useState<LocationData | null>(null);
   const [pinnedLocation, setPinnedLocation] = useState<LocationData | null>(null);
   const focusLocation = pinnedLocation ?? currentLocation;
 
   const [pendingSync, setPendingSync] = useState(0);
-  const [totalObs, setTotalObs] = useState(0);
 
   const { isOnline } = useNetworkStatus();
   const mapRef = useRef<MapViewRef>(null);
@@ -96,6 +98,8 @@ function App() {
   useEffect(() => {
     syncEngine.startAutoSync();
     geoService.current.watchPosition((loc) => setCurrentLocation(loc));
+    const unsub = trackRecorder.subscribe(setActiveTrack);
+    void trackRecorder.restore();
     rasterLayerService.getRasterLayers().then(all => {
       setForestLayers(all.filter(l => l.category === 'forest'));
     });
@@ -104,9 +108,7 @@ function App() {
     const refreshCounts = async () => {
       try {
         const pending = await db.observations.where('syncStatus').anyOf(['pending', 'queued', 'failed']).count();
-        const total = await db.observations.count();
         setPendingSync(pending);
-        setTotalObs(total);
         const recent = await db.observations.orderBy('timestamp').reverse().limit(80).toArray();
         setNoteMarkers(recent.map(o => ({ id: o.id, lat: o.location.lat, lon: o.location.lon })));
       } catch {
@@ -117,6 +119,7 @@ function App() {
     const t = setInterval(refreshCounts, 5000);
     return () => {
       geoService.current.stopWatching();
+      unsub();
       clearInterval(t);
     };
   }, [refreshAois]);
@@ -310,24 +313,19 @@ function App() {
     return () => window.clearTimeout(handle);
   }, [focusLocation?.lat, focusLocation?.lon, indiasatYear, isOnline]);
 
-  const handleCaptureButton = useCallback(async () => {
-    if (!focusLocation) {
-      const ok = await handleLocateMe();
-      if (!ok && !currentLocation) {
-        setToast('Turn on location, or tap the map where the tree is.');
-      }
-    }
+  const handleCaptureButton = useCallback(() => {
     setCaptureOpen(true);
-  }, [focusLocation, currentLocation, handleLocateMe]);
+    if (!focusLocation) void handleLocateMe();
+  }, [focusLocation, handleLocateMe]);
 
   const handleObservationSubmit = useCallback(async (obs: Observation) => {
     await db.observations.add(obs);
     await syncEngine.enqueue(obs.id);
+    if (obs.trackId) await trackRecorder.attachObservation(obs.id);
     setPendingSync(p => p + 1);
-    setTotalObs(p => p + 1);
     setNoteMarkers(prev => [{ id: obs.id, lat: obs.location.lat, lon: obs.location.lon }, ...prev].slice(0, 80));
     setCaptureOpen(false);
-    setToast(isOnline ? 'Saved. Filling IndiaSAT, weather, and place names in the background.' : 'Saved on this phone. Will fill maps when you have signal.');
+    setToast(isOnline ? 'Saved. Maps fill in when they can.' : 'Saved on this phone.');
   }, [isOnline]);
 
   const handleGoToLocation = useCallback((lat: number, lon: number) => {
@@ -361,6 +359,7 @@ function App() {
       <Header
         isOnline={isOnline}
         syncStatus={{ pending: pendingSync }}
+        recording={activeTrack?.status === 'recording'}
         onSettingsClick={() => setSettingsOpen(s => !s)}
       />
 
@@ -375,6 +374,7 @@ function App() {
           currentLocation={currentLocation}
           aoiLayers={aoiLayers}
           noteMarkers={noteMarkers}
+          trackPoints={activeTrack?.points ?? []}
           onMapMove={handleMapMove}
           onMapClick={handleMapClick}
         />
@@ -392,11 +392,32 @@ function App() {
 
         {activeTab === 'map' && (
           <div className="fields-prediction-anchor">
+            <TrackHud
+              track={activeTrack}
+              location={currentLocation}
+              onStart={async () => {
+                try {
+                  await trackRecorder.start();
+                } catch {
+                  setToast('Could not start GPS. Allow location for Fields, then try again.');
+                  return;
+                }
+                void handleLocateMe();
+              }}
+              onPause={() => { void trackRecorder.pause(); }}
+              onResume={() => { void trackRecorder.resume(); }}
+              onStop={async () => {
+                const done = await trackRecorder.stop();
+                setToast(done ? `Saved ${done.name}` : 'Track saved');
+              }}
+            />
             <SpotBar
               focusLocation={focusLocation}
               placeLabel={corePlace}
               pendingEnrichment={pendingSync}
               indiaSatClass={indiaSatClass}
+              showTessera={tesseraOn}
+              recording={Boolean(activeTrack)}
             />
           </div>
         )}
@@ -453,7 +474,7 @@ function App() {
         {activeTab === 'log' && (
           <div className="panel-overlay">
             <div className="panel-header">
-              <h2>Field log · {totalObs} note{totalObs === 1 ? '' : 's'}</h2>
+              <h2>Journal</h2>
               <button className="panel-close" onClick={() => setActiveTab('map')}>✕</button>
             </div>
             <FieldLog onGoToLocation={handleGoToLocation} />
@@ -469,13 +490,16 @@ function App() {
           else setActiveTab(tt);
         }}
         onCaptureClick={handleCaptureButton}
+        recording={activeTrack?.status === 'recording'}
         pendingSync={pendingSync}
       />
 
       {captureOpen && (
         <QuickCapture
-          focusLocation={focusLocation}
+          focusLocation={focusLocation ?? { lat: center[1], lon: center[0], accuracy: 0, timestamp: Date.now() }}
           indiaSatHint={indiaSatClass}
+          autoCamera={!activeTrack}
+          trackId={activeTrack?.id ?? null}
           onSubmit={handleObservationSubmit}
           onClose={() => setCaptureOpen(false)}
         />
@@ -531,7 +555,7 @@ const OverlayPanel: React.FC<{
         <button className="panel-close" onClick={onClose}>✕</button>
       </div>
       <div className="overlay-content">
-        <p className="overlay-lede">Colour the map if you want a hint. Your photo is the record — maps can wait until you have signal.</p>
+        <p className="overlay-lede">Optional colouring. Your GPS track and photos are the record — these maps can wait until you have signal.</p>
         <section className="overlay-card">
           <header>
             <div>

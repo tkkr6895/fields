@@ -16,6 +16,7 @@
 import { Filesystem, Directory, Encoding } from '@capacitor/filesystem';
 import { Share } from '@capacitor/share';
 import { db, dbReady, exportToGeoJSON, exportToCSV } from '../db/database';
+import { exportTracksToGPX, exportTracksToGeoJSON } from './TrackExport';
 import JSZip from 'jszip';
 
 export interface ExportProgress {
@@ -110,6 +111,10 @@ class ExportService {
       const csv = await exportToCSV(observations);
       zip.file('observations.csv', csv);
 
+      const tracks = await db.tracks.toArray();
+      zip.file('tracks.gpx', exportTracksToGPX(tracks, observations));
+      zip.file('tracks.geojson', exportTracksToGeoJSON(tracks));
+
       // Add images
       const images = await db.images.toArray();
       console.log(`[ExportService] Found ${images.length} images for ZIP export`);
@@ -132,7 +137,7 @@ class ExportService {
         platform: 'hybrid',
         observationCount: observations.length,
         imageCount: images.length,
-        files: ['observations.json', 'observations.geojson', 'observations.csv', ...images.map(img => `images/${img.id}.jpg`)]
+        files: ['observations.json', 'observations.geojson', 'observations.csv', 'tracks.gpx', 'tracks.geojson', ...images.map(img => `images/${img.id}.jpg`)]
       };
       zip.file('manifest.json', JSON.stringify(manifest, null, 2));
 
@@ -158,8 +163,8 @@ class ExportService {
         try {
           const fileUri = await Filesystem.getUri({ path: zipPath, directory: Directory.Documents });
           await Share.share({
-            title: 'Western Ghats Field Data',
-            text: `Field observations export from ${new Date().toLocaleDateString()}`,
+            title: 'Fields export',
+            text: `Tracks and notes from ${new Date().toLocaleDateString()}`,
             url: fileUri.uri,
             dialogTitle: 'Share Field Data'
           });
@@ -219,6 +224,10 @@ class ExportService {
 
       this.notifyProgress({ stage: 'observations', current: 3, total: 3, message: 'Adding observations.csv...' });
       zip.file('observations.csv', await exportToCSV(observations));
+
+      const tracks = await db.tracks.toArray();
+      zip.file('tracks.gpx', exportTracksToGPX(tracks, observations));
+      zip.file('tracks.geojson', exportTracksToGeoJSON(tracks));
 
       const images = await db.images.toArray();
       const imagesFolder = zip.folder('images');
@@ -317,7 +326,7 @@ class ExportService {
         observationCount: observations.length,
         imageCount: images.length,
         images: images.map(img => ({ id: img.id, createdAt: img.createdAt, filename: `images/${img.id}.jpg`, size: img.blob.size })),
-        files: ['observations.json', 'observations.geojson', 'observations.csv', ...images.map(img => `images/${img.id}.jpg`)]
+        files: ['observations.json', 'observations.geojson', 'observations.csv', 'tracks.gpx', 'tracks.geojson', ...images.map(img => `images/${img.id}.jpg`)]
       };
       await this.writeJsonFile(`${exportFolder}/manifest.json`, manifest);
 

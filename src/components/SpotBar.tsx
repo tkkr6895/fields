@@ -6,27 +6,39 @@ interface SpotBarProps {
   placeLabel?: string | null;
   pendingEnrichment?: number;
   indiaSatClass?: { name: string; color: string; classId: number } | null;
+  showTessera?: boolean;
+  recording?: boolean;
 }
 
-const SpotBar: React.FC<SpotBarProps> = ({ focusLocation, placeLabel, pendingEnrichment = 0, indiaSatClass }) => {
+const SpotBar: React.FC<SpotBarProps> = ({
+  focusLocation,
+  placeLabel,
+  pendingEnrichment = 0,
+  indiaSatClass,
+  showTessera = false,
+  recording = false,
+}) => {
+  if (recording) return null;
   if (!focusLocation) {
     return (
       <div className="prediction-card prediction-card--empty">
         <div className="prediction-card__lede">
-          <strong>Find your tree</strong>
-          <span>Tap the crosshair to use GPS, or tap the map. Then tap the green + to photograph it.</span>
+          <strong>You are here</strong>
+          <span>Tap the crosshair for GPS, or tap the map. Start a track to log the walk. The camera marks a tree or a point of interest.</span>
         </div>
       </div>
     );
   }
-  const tile = tesseraTileForPoint(focusLocation.lat, focusLocation.lon);
+  const acc = Math.round(focusLocation.accuracy || 0);
+  const tile = showTessera ? tesseraTileForPoint(focusLocation.lat, focusLocation.lon) : null;
   return (
     <div className="prediction-card prediction-card--collapsed">
       <div className="prediction-card__header">
         <div className="prediction-card__loc">
           <strong>{placeLabel || 'This spot'}</strong>
           <span>
-            ±{Math.round(focusLocation.accuracy || 0)} m · Tessera {tile.tileId}
+            {focusLocation.lat.toFixed(5)}, {focusLocation.lon.toFixed(5)} · ±{acc} m
+            {tile ? ` · Tessera ${tile.tileId}` : ''}
             {pendingEnrichment > 0 ? ` · ${pendingEnrichment} filling in` : ''}
           </span>
           {indiaSatClass && (

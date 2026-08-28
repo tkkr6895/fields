@@ -1,17 +1,18 @@
-# Architecture (v1.2)
+# Architecture (v1.3)
 
-Fields is an offline-first PWA (and Capacitor Android wrapper) for **ground notes**: photos + GPS that later join IndiaSAT / CoRE Stack maps and Tessera tiles.
+Fields is an offline-first PWA (and Capacitor Android wrapper) for **GPS tracks** and **ground notes**. Maps are optional colouring.
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│  Header (online / pending)          Settings (AOI, API key) │
-│  MapLibre: one colour overlay at a time (IndiaSAT or Tessera)│
-│  SpotBar (place + Tessera tile id + IndiaSAT class name)    │
-│  Bottom: Map | Maps |  +  | Log                             │
+│  Header (offline / REC)              Settings (AOI, API key) │
+│  MapLibre: track line + notes                                │
+│  Track HUD: Start / Pause / Save                             │
+│  Bottom: Journal | camera | Maps                             │
 └─────────────────────────────────────────────────────────────┘
-        │ + = QuickCapture (camera, no network wait)
+        │ Start track = high-accuracy GPS (foreground service on Android)
+        │ Camera = note / waypoint (photo optional)
         ▼
-  Dexie: observations, images, customLayers, syncQueue
+  Dexie: tracks, observations, images, customLayers, syncQueue
         │ SyncEngine when online
         ▼
   CoRE admin + IndiaSAT GRAY_INDEX + weather + GBIF
@@ -21,14 +22,15 @@ Fields is an offline-first PWA (and Capacitor Android wrapper) for **ground note
 
 | Must be instant | May wait for signal |
 | --- | --- |
-| Camera, GPS or map pin, species text, save to IndexedDB, Tessera **tile id** | IndiaSAT class, CoRE layer list, WMS colouring, weather, GBIF nearby, Tessera embedding sample |
+| GPS track, camera or tag, save to IndexedDB, Tessera **tile id** | IndiaSAT class, CoRE layer list, WMS colouring, weather, GBIF nearby |
 
 ## Map
 
 - Basemaps: CARTO dark, Esri World Imagery.
-- IndiaSAT / CoRE rasters: WMS via `wmsTiles.ts` (XYZ rewritten to EPSG:3857 bbox). Class colours from the IndiaSAT legend.
-- Tessera: one packed JPEG per 0.1° tile (`public/data/tessera/`) as a MapLibre image overlay. Mutually exclusive with IndiaSAT so the two products cannot be mistaken for each other.
-- Imported AOIs: GeoJSON from IndexedDB (`CustomLayerManager`).
+- Live track: MapLibre line from on-device GPS fixes (accuracy-filtered).
+- IndiaSAT / CoRE rasters: WMS via `wmsTiles.ts`. Mutually exclusive with Tessera colour.
+- Tessera: one packed JPEG per 0.1° tile as an image overlay.
+- Imported AOIs: GeoJSON from IndexedDB.
 - Bundled forest PNGs: `RasterLayerService` + `image-manifest`.
 
 ## Auth
@@ -37,8 +39,8 @@ CoRE: `X-API-Key` from Settings localStorage or `VITE_CORESTACK_API_KEY`. Never 
 
 ## Exports
 
-`ExportService` / `AnnotationExporter` / Field Log: GeoJSON, CSV (species, forest type, tessera tile, IndiaSAT, tehsil), GeoAI ZIP with photos, STAC, PBR.
+Journal → Share pack: GPX, GeoJSON, CSV, photos. Gaia / QGIS / Google Earth can open the GPX. `AnnotationExporter` still offers GeoAI / STAC packs.
 
 ## Stack
 
-React 18, TypeScript, Vite 5, MapLibre 4, Dexie 4, Capacitor 8. Optional Python Tessera proxy. **No Earth Engine in the client.**
+React 18, TypeScript, Vite 5, MapLibre 4, Dexie 4, Capacitor 8, `@capgo/background-geolocation`. **No Earth Engine in the client.**

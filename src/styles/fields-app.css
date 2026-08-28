@@ -215,7 +215,7 @@
 .fields-toast {
   position: absolute;
   left: 50%;
-  bottom: 168px;
+  bottom: 220px;
   transform: translateX(-50%);
   width: min(90vw, 420px);
   z-index: 80;
@@ -512,4 +512,89 @@
 .onboard-card .vc-field-label input {
   background: rgba(255,255,255,0.06); color: var(--fields-text);
   border: 1px solid var(--fields-border); border-radius: 8px; padding: 8px;
+}
+
+/* ─── Track HUD ─────────────────────────────────────────────────────── */
+.track-hud {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--fields-bg);
+  border: 1px solid var(--fields-border);
+  border-radius: 16px;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+  backdrop-filter: blur(16px);
+  pointer-events: auto;
+}
+.track-hud--idle {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+}
+.track-hud--idle p {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--fields-text-dim);
+}
+.track-hud__start {
+  width: 100%;
+  border: 0;
+  border-radius: 12px;
+  padding: 12px 16px;
+  font-weight: 700;
+  font-size: 1rem;
+  background: #e53935;
+  color: #fff;
+  cursor: pointer;
+}
+.track-hud__start:active { transform: translateY(1px); }
+.track-hud--live { border-color: rgba(229, 57, 53, 0.45); }
+.track-hud__pulse {
+  width: 10px; height: 10px; border-radius: 50%;
+  background: #e53935;
+  box-shadow: 0 0 0 0 rgba(229, 57, 53, 0.6);
+  animation: fields-pulse 1.6s infinite;
+  flex-shrink: 0;
+}
+.track-hud--paused .track-hud__pulse { animation: none; background: var(--fields-warn); }
+.track-hud__stats { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.track-hud__stats strong { font-size: 0.82rem; letter-spacing: 0.04em; text-transform: uppercase; }
+.track-hud__stats span { font-size: 0.8rem; color: var(--fields-text-dim); font-variant-numeric: tabular-nums; }
+.track-hud__actions { display: flex; gap: 6px; }
+.track-hud__btn {
+  border: 1px solid var(--fields-border);
+  background: rgba(255,255,255,0.06);
+  color: var(--fields-text);
+  border-radius: 10px;
+  padding: 8px 10px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.track-hud__btn--stop { background: #e53935; border-color: transparent; color: #fff; }
+
+.recording-badge {
+  background: #e53935 !important;
+  color: #fff !important;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  font-size: 10px;
+}
+
+.log-entry--track { border-left: 3px solid #e53935; }
+.log-entry-thumb-empty {
+  display: flex; align-items: center; justify-content: center;
+  height: 100%; font-size: 11px; color: var(--text-muted);
+  text-transform: uppercase; letter-spacing: 0.04em;
+  padding: 4px;
+}
+.db-error-banner {
+  background: #ff6b6b22;
+  border: 1px solid #ff6b6b;
+  border-radius: 8px;
+  padding: 12px;
+  margin: 8px;
+  color: #ff6b6b;
+  font-size: 13px;
 }

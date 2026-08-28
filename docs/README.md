@@ -18,4 +18,4 @@ This folder is reference material for people changing the code.
 | [plan/](./plan/) | Original spec (historical) |
 | [archive/](./archive/) | Demo scripts and session notes (often outdated) |
 
-**Current product (v1.2):** two field loops — [IndiaSAT / CoRE validation](../example-flows/01-indiasat-validation.html) and [Tessera tree-species labelling](../example-flows/02-tessera-tree-species.html). Land cover is IndiaSAT WMS (class colours). Tessera on the phone is one packed 0.1° RGB fingerprint (bands 30/60/90), never the 128-d tensor. The two overlays cannot be on together. There is **no Google Earth Engine** and **no Dynamic World** in the running app.
+**Current product (v1.3):** offline GPS tracks plus notes. Two optional map loops remain — [IndiaSAT / CoRE validation](../example-flows/01-indiasat-validation.html) and [Tessera tree-species labelling](../example-flows/02-tessera-tree-species.html). Tracks and notes work with no maps at all. Install the phone build from the [sideload release](https://github.com/tkkr6895/fields/releases/tag/sideload), not the Actions zip.

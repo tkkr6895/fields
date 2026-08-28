@@ -9,6 +9,9 @@ on:
     branches: [main]
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -42,28 +45,46 @@ jobs:
       - name: Sync Capacitor Android
         run: npx cap sync android
 
-      - name: Build Debug APK
+      - name: Build signed sideload APK
         working-directory: android
-        run: chmod +x gradlew && ./gradlew assembleDebug
+        run: chmod +x gradlew && ./gradlew assembleRelease
 
-      - name: Upload Debug APK
+      - name: Name APK
+        run: |
+          mkdir -p dist-apk
+          cp android/app/build/outputs/apk/release/app-release.apk dist-apk/Fields.apk
+          ls -lh dist-apk/Fields.apk
+
+      - name: Upload Fields.apk
         uses: actions/upload-artifact@v4
         with:
-          name: fields-debug
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          name: Fields-apk
+          path: dist-apk/Fields.apk
+          if-no-files-found: error
           retention-days: 30
 
-      - name: Create Release APK (on tag)
-        if: startsWith(github.ref, 'refs/tags/')
-        working-directory: android
-        run: ./gradlew assembleDebug
-
-      - name: Create GitHub Release
-        if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v1
+      - name: Publish sideload release
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v2
         with:
-          files: |
-            android/app/build/outputs/apk/debug/app-debug.apk
+          tag_name: sideload
+          name: Fields APK (sideload)
+          files: dist-apk/Fields.apk
+          fail_on_unmatched_files: true
+          make_latest: true
+          body: |
+            Direct APK for the phone. **Do not install the Actions zip.**
+
+            1. Uninstall any older Fields app first (debug builds used a different signature).
+            2. Download **Fields.apk** from this release (not from Actions artifacts).
+            3. Open the file on the phone → Allow from this source → Install.
+            4. If Play Protect warns, choose Install anyway. This is a sideload build, not Play Store.
+
+            Grant **precise location** (and **Allow all the time** if you hike with the screen off). Camera is optional.
+
+      - name: Create GitHub Release (version tags)
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist-apk/Fields.apk
           generate_release_notes: true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

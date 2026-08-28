@@ -3,10 +3,11 @@ import React from 'react';
 interface HeaderProps {
   isOnline: boolean;
   syncStatus?: { pending: number; lastSync?: Date };
+  recording?: boolean;
   onSettingsClick: () => void;
 }
 
-const Header: React.FC<HeaderProps> = ({ isOnline, syncStatus, onSettingsClick }) => {
+const Header: React.FC<HeaderProps> = ({ isOnline, syncStatus, recording, onSettingsClick }) => {
   return (
     <header className="app-header">
       <div className="header-brand">
@@ -31,7 +32,7 @@ const Header: React.FC<HeaderProps> = ({ isOnline, syncStatus, onSettingsClick }
         </div>
         <div className="header-title">
           <span className="title-main">Fields</span>
-          <span className="title-sub">Ground notes for maps</span>
+          <span className="title-sub">{recording ? 'Recording track' : 'Walk · note · ground-truth'}</span>
         </div>
       </div>
       
@@ -41,6 +42,9 @@ const Header: React.FC<HeaderProps> = ({ isOnline, syncStatus, onSettingsClick }
           <span className="indicator-text">{isOnline ? 'Online' : 'Offline'}</span>
         </div>
         
+        {recording && (
+          <div className="sync-badge recording-badge" title="GPS track in progress">REC</div>
+        )}
         {syncStatus && syncStatus.pending > 0 && (
           <div className="sync-badge">
             <span className="sync-icon">↻</span>

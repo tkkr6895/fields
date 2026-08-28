@@ -33,6 +33,7 @@ interface MapViewProps {
   currentLocation: LocationData | null;
   aoiLayers?: CustomLayer[];
   noteMarkers?: NoteMarker[];
+  trackPoints?: Array<{ lat: number; lon: number }>;
   onMapMove: (center: [number, number], zoom: number) => void;
   onMapClick?: (lat: number, lon: number, info?: MapClickInfo) => void;
 }
@@ -108,7 +109,7 @@ function tilePathForLayer(layer: DatasetLayer): string {
 }
 
 const MapView = forwardRef<MapViewRef, MapViewProps>(
-  ({ center, zoom, basemap, layers, activeLayers, currentLocation, aoiLayers = [], noteMarkers = [], onMapMove, onMapClick }, ref) => {
+  ({ center, zoom, basemap, layers, activeLayers, currentLocation, aoiLayers = [], noteMarkers = [], trackPoints = [], onMapMove, onMapClick }, ref) => {
     const mapContainer = useRef<HTMLDivElement>(null);
     const map = useRef<maplibregl.Map | null>(null);
     const userMarker = useRef<maplibregl.Marker | null>(null);
@@ -118,12 +119,14 @@ const MapView = forwardRef<MapViewRef, MapViewProps>(
     const onMapClickRef = useRef(onMapClick);
     const aoiRef = useRef(aoiLayers);
     const notesRef = useRef(noteMarkers);
+    const trackRef = useRef(trackPoints);
 
     useEffect(() => { activeLayersRef.current = activeLayers; }, [activeLayers]);
     useEffect(() => { onMapMoveRef.current = onMapMove; }, [onMapMove]);
     useEffect(() => { onMapClickRef.current = onMapClick; }, [onMapClick]);
     useEffect(() => { aoiRef.current = aoiLayers; }, [aoiLayers]);
     useEffect(() => { notesRef.current = noteMarkers; }, [noteMarkers]);
+    useEffect(() => { trackRef.current = trackPoints; }, [trackPoints]);
 
     useImperativeHandle(ref, () => ({
       zoomIn: () => map.current?.zoomIn({ duration: 300 }),
@@ -203,6 +206,36 @@ const MapView = forwardRef<MapViewRef, MapViewProps>(
             'circle-stroke-width': 2,
             'circle-stroke-color': '#0a0a12',
           },
+        });
+      }
+
+      const line: GeoJSON.Feature<GeoJSON.LineString> = {
+        type: 'Feature',
+        geometry: {
+          type: 'LineString',
+          coordinates: trackRef.current.map((p) => [p.lon, p.lat]),
+        },
+        properties: {},
+      };
+      const trackFc: GeoJSON.FeatureCollection = {
+        type: 'FeatureCollection',
+        features: line.geometry.coordinates.length >= 2 ? [line] : [],
+      };
+      const tSrc = m.getSource('track-source') as maplibregl.GeoJSONSource | undefined;
+      if (tSrc) tSrc.setData(trackFc);
+      else {
+        m.addSource('track-source', { type: 'geojson', data: trackFc });
+        m.addLayer({
+          id: 'track-halo',
+          type: 'line',
+          source: 'track-source',
+          paint: { 'line-color': '#0a0a12', 'line-width': 7, 'line-opacity': 0.45 },
+        });
+        m.addLayer({
+          id: 'track-line',
+          type: 'line',
+          source: 'track-source',
+          paint: { 'line-color': '#ff6b6b', 'line-width': 3.5, 'line-opacity': 0.95 },
         });
       }
     }, []);
@@ -357,7 +390,7 @@ const MapView = forwardRef<MapViewRef, MapViewProps>(
     }, [basemap, syncRasterLayers]);
 
     useEffect(() => { syncRasterLayers(); }, [syncRasterLayers]);
-    useEffect(() => { syncAoiAndNotes(); }, [aoiLayers, noteMarkers, syncAoiAndNotes]);
+    useEffect(() => { syncAoiAndNotes(); }, [aoiLayers, noteMarkers, trackPoints, syncAoiAndNotes]);
 
     useEffect(() => {
       if (!map.current) return;

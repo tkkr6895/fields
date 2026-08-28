@@ -6,7 +6,7 @@
 export type SyncStatus = 'pending' | 'queued' | 'syncing' | 'synced' | 'failed';
 
 /** 1.2.2 — Observation categories */
-export type ObservationType = 'land_cover' | 'species_sighting' | 'water_body' | 'restoration_site' | 'general'
+export type ObservationType = 'land_cover' | 'species_sighting' | 'water_body' | 'restoration_site' | 'general' | 'waypoint'
   | 'waterbody_validation' | 'drainage_validation' | 'farm_pond_validation' | 'infrastructure_validation';
 
 /** 1.2.3 — Indian meteorological seasons */
@@ -23,6 +23,37 @@ export interface LocationData {
   accuracy: number;
   timestamp?: number;
   altitude?: number;
+  altitudeAccuracy?: number;
+  heading?: number;
+  speed?: number;
+  simulated?: boolean;
+}
+
+export interface TrackPoint {
+  lat: number;
+  lon: number;
+  accuracy: number;
+  altitude?: number;
+  altitudeAccuracy?: number;
+  heading?: number;
+  speed?: number;
+  timestamp: number;
+  simulated?: boolean;
+}
+
+export type TrackStatus = 'recording' | 'paused' | 'finished';
+
+export interface FieldTrack {
+  id: string;
+  name: string;
+  startedAt: string;
+  endedAt?: string;
+  status: TrackStatus;
+  points: TrackPoint[];
+  distanceM: number;
+  tags?: string[];
+  notes?: string;
+  observationIds: string[];
 }
 
 /** Schema for a property in a vector dataset layer */
@@ -171,6 +202,8 @@ export interface Observation {
   weather?: WeatherSnapshot;
   tessera?: TesseraObservationContext;
   coreStack?: CoreStackObservationContext;
+  /** Active hike / survey track this note was dropped on, if any. */
+  trackId?: string;
 }
 
 /**
@@ -411,7 +444,7 @@ export interface ExportLogEntry {
   id?: number;                        // auto-increment
   exportedAt: number;
   recordCount: number;
-  format: 'geoai_zip' | 'stac' | 'geojson' | 'csv' | 'pbr_zip';
+  format: 'geoai_zip' | 'stac' | 'geojson' | 'csv' | 'pbr_zip' | 'gpx';
   fileName?: string;
   sizeBytes?: number;
   observationIds?: string[];          // which observations were included

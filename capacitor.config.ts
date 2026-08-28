@@ -5,11 +5,10 @@ const config: CapacitorConfig = {
   appName: 'Fields',
   webDir: 'dist',
   server: {
-    // Use embedded assets, no external server needed
     androidScheme: 'https'
   },
   android: {
-    // Build as standalone app
+    useLegacyBridge: true,
     buildOptions: {
       keystorePath: undefined,
       keystorePassword: undefined,
@@ -19,15 +18,12 @@ const config: CapacitorConfig = {
     }
   },
   plugins: {
-    // Geolocation permissions
     Geolocation: {
       permissions: ['location', 'coarseLocation']
     },
-    // Camera permissions (Task 1.6.3)
     Camera: {
       permissions: ['camera', 'photos']
     },
-    // Network (Task 1.6.3) — no special config needed, just declared
     Network: {}
   }
 };

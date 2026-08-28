@@ -1,5 +1,5 @@
 import Dexie, { Table } from 'dexie';
-import type { Observation, Species, CustomLayer, SyncQueueItem, ExportLogEntry, ObservationType, SyncStatus as SyncStatusType } from '../types';
+import type { Observation, Species, CustomLayer, SyncQueueItem, ExportLogEntry, ObservationType, SyncStatus as SyncStatusType, FieldTrack } from '../types';
 import { deriveSeason } from '../services/SeasonService';
 
 /** Extended filter options for getObservations (Task 1.3.4) */
@@ -36,6 +36,7 @@ class FieldValidatorDB extends Dexie {
   customLayers!: Table<CustomLayer>;
   syncQueue!: Table<SyncQueueItem>;
   exportLog!: Table<ExportLogEntry>;
+  tracks!: Table<FieldTrack>;
 
   private _isOpen = false;
   private _openError: Error | null = null;
@@ -75,6 +76,17 @@ class FieldValidatorDB extends Dexie {
         obs.confidence = obs.confidence ?? null;
         obs.season = obs.season || deriveSeason(obs.timestamp);
       });
+    });
+
+    this.version(3).stores({
+      observations: 'id, timestamp, userValidation, [location.lat+location.lon], syncStatus, observationType, userId, trackId',
+      images: 'id, createdAt',
+      datasets: 'id, layerId, updatedAt',
+      species: 'id, scientificName, *commonNameTokens, *vernacularTokens, family, kingdom, iucnStatus, isEndemic, source',
+      customLayers: 'id, title, createdAt, category',
+      syncQueue: '++id, observationId, status, createdAt, [status+createdAt]',
+      exportLog: '++id, exportedAt, recordCount, format',
+      tracks: 'id, startedAt, status',
     });
     
     // Auto-initialize
@@ -260,6 +272,8 @@ export async function exportToGeoJSON(observations: Observation[]): Promise<stri
       validation: obs.userValidation,
       notes: obs.notes,
       accuracy_m: obs.location.accuracy,
+      altitude_m: obs.location.altitude ?? null,
+      track_id: obs.trackId ?? null,
       ...Object.entries(obs.datasetValues || {}).reduce((acc, [layerId, values]) => {
         Object.entries(values).forEach(([field, value]) => {
           acc[`${layerId}_${field}`] = value;
@@ -295,7 +309,7 @@ export async function exportToCSV(observations: Observation[]): Promise<string> 
 
   const headers = [
     'id', 'timestamp', 'lat', 'lon', 'accuracy_m', 'altitude_m',
-    'observation_type', 'validation', 'notes', 'confidence', 'season',
+    'observation_type', 'validation', 'notes', 'confidence', 'season', 'tags', 'track_id',
     'indiasat_class', 'indiasat_confidence', 'indiasat_agreement', 'indiasat_observer_class',
     'tessera_tile_id', 'tessera_year', 'tessera_coverage',
     'cover_tree_pct', 'cover_shrub_pct', 'cover_grass_pct', 'cover_crop_pct',
@@ -334,6 +348,8 @@ export async function exportToCSV(observations: Observation[]): Promise<string> 
       csvEscape(obs.notes),
       obs.confidence ?? '',
       obs.season || '',
+      csvEscape((obs.tags || []).join('|')),
+      obs.trackId ?? '',
       sat?.className ?? '',
       sat?.confidence ?? '',
       sat?.agreement ?? '',
@@ -538,4 +554,19 @@ export async function searchSpecies(query: string, limit = 20): Promise<Species[
 export async function getSpeciesById(id: string): Promise<Species | undefined> {
   if (!await db.ensureOpen()) return undefined;
   return await db.species.get(id);
+}
+
+export async function getTracks(): Promise<FieldTrack[]> {
+  if (!await db.ensureOpen()) return [];
+  return await db.tracks.orderBy('startedAt').reverse().toArray();
+}
+
+export async function getTrackById(id: string): Promise<FieldTrack | undefined> {
+  if (!await db.ensureOpen()) return undefined;
+  return await db.tracks.get(id);
+}
+
+export async function deleteTrack(id: string): Promise<void> {
+  if (!await db.ensureOpen()) return;
+  await db.tracks.delete(id);
 }

@@ -7,16 +7,16 @@ interface OnboardingProps {
 
 const SLIDES = [
   {
-    title: 'Photograph the tree',
-    body: 'Tap the green +. The camera opens immediately. Name the tree if you can, say native / plantation / mixed, then save and keep walking. Nothing waits on the network.',
+    title: 'Walk, even without maps',
+    body: 'Start a track. The phone records GPS as precisely as it can — satellite, Wi-Fi, or cell — and keeps the trail on this device. No signal required.',
   },
   {
-    title: 'Maps are a hint, not the truth',
-    body: 'You can colour the map with IndiaSAT land cover from CoRE Stack, and Tessera landscape colour for the tile under your feet (packed for Sulya). If the colour is wrong, photograph it — that is the dataset.',
+    title: 'Mark what you see',
+    body: 'The camera button drops a photo, a tag, or a one-line note at your location. Do that to ground-truth a map class, name a tree, or just remember a fork in the trail.',
   },
   {
-    title: 'Your notes train better maps',
-    body: 'Each save stores GPS, a photo, tree name if you know it, and stand type. Maps and weather attach later when you have signal. Export from the Log when you are back.',
+    title: 'Share when you are back',
+    body: 'Journal → Share pack. You get GPX for the hike, GeoJSON and CSV for notes, and photos. Maps (IndiaSAT, Tessera) are optional colouring, never a requirement.',
   },
 ];
 
@@ -42,7 +42,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onDone }) => {
             <p className="onboard-kicker">Fields</p>
             <h1>{SLIDES[slide].title}</h1>
             <p className="onboard-body">{SLIDES[slide].body}</p>
-            <div className="onboard-dots">
+            <div className="onboard-dots" aria-hidden="true">
               {SLIDES.map((_, i) => (
                 <span key={i} className={i === slide ? 'on' : ''} />
               ))}
@@ -56,7 +56,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onDone }) => {
           <>
             <p className="onboard-kicker">Almost ready</p>
             <h1>What should we call you?</h1>
-            <p className="onboard-body">Optional. Stored only on this device, and written onto each observation so you know which notes are yours.</p>
+            <p className="onboard-body">Optional. Stored only on this device, written onto each note so you know which records are yours.</p>
             <label className="vc-field-label">Name
               <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Your name or nickname" />
             </label>
@@ -65,7 +65,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onDone }) => {
             </label>
             <div className="onboard-actions">
               <button className="btn" onClick={() => setSlide(SLIDES.length - 1)}>Back</button>
-              <button className="btn btn--primary" onClick={finish}>Start mapping</button>
+              <button className="btn btn--primary" onClick={finish}>Start walking</button>
             </div>
           </>
         )}

@@ -4,9 +4,9 @@ Clone this repo (the app **is** the repository root — there is no nested `fiel
 
 ## Prerequisites
 
-- Node.js 18+
+- Node.js 22+
 - npm 9+
-- Optional: Android Studio + JDK 21 (local APK). GitHub Actions already builds a debug APK on every push to `main`.
+- Optional: Android Studio + JDK 21 (local APK). GitHub Actions publishes a signed **Fields.apk** on every push to `main` ([sideload release](https://github.com/tkkr6895/fields/releases/tag/sideload)).
 
 ## Quick start
 

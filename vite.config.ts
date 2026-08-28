@@ -43,7 +43,7 @@ export default defineConfig({
         ]
       },
       workbox: {
-        globPatterns: ['**/*.{js,css,html,ico,png,jpg,jpeg,svg,woff2,json,geojson,csv}'],
+        globPatterns: ['**/*.{js,css,html,ico,png,jpg,jpeg,svg,woff2,json,geojson,csv,pbf,pmtiles}'],
         maximumFileSizeToCacheInBytes: 50 * 1024 * 1024, // 50MB for datasets
         runtimeCaching: [
           {
@@ -101,11 +101,12 @@ export default defineConfig({
         rewrite: (path) => path.replace(/^\/api\/geoserver/, '/geoserver'),
         secure: false
       },
-      '/api/tessera': {
-        target: 'http://localhost:8788',
+      '/api/s2': {
+        target: 'https://tiles.maps.eox.at',
         changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api\/tessera/, '')
-      }
+        rewrite: (path) => path.replace(/^\/api\/s2/, '/wmts/1.0.0/s2cloudless-2024_3857/default/g'),
+        secure: true,
+      },
     }
   }
 });

@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Offline maps — Fields</title>
+  <link rel="stylesheet" href="story.css" />
+</head>
+<body>
+  <div class="wrap">
+    <nav class="top">
+      <a href="index.html">All flows</a>
+      <a href="01-indiasat-validation.html">IndiaSAT</a>
+      <a href="02-tessera-tree-species.html">Tessera</a>
+    </nav>
+    <p class="kicker">Flow 3 · maps on the phone</p>
+    <h1>The install stays small.<br />Any place on Earth can come with you.</h1>
+    <p class="lede">
+      Fields does not ship the planet in the APK. OpenStreetMap streets and Sentinel-2 (~10&nbsp;m) land in
+      <strong>phone storage</strong> as you pan, or when you tap <strong>Save maps</strong>. Sharp Esri aerial is live-only.
+    </p>
+
+    <section class="scene">
+      <div>
+        <div class="phone"><img src="screenshots/15-satellite-home.png" alt="Satellite home with Save maps" /></div>
+        <p class="caption">Satellite · Esri when online, Sentinel-2 kept underneath for offline</p>
+      </div>
+      <div class="copy">
+        <h2>Walk with a picture of the land.</h2>
+        <p>Online you get sharp Esri imagery. The phone also quietly keeps Sentinel-2 for this view so the map is not blank when coverage drops.</p>
+      </div>
+    </section>
+
+    <section class="scene reverse">
+      <div>
+        <div class="phone"><img src="screenshots/14-save-maps.png" alt="Keep this view on the phone sheet" /></div>
+        <p class="caption">Save maps · size estimate, then streets + Sentinel-2 for this bbox</p>
+      </div>
+      <div class="copy">
+        <h2>Save the walk before you lose signal.</h2>
+        <p>Zoom to the trail. The sheet tells you roughly how many megabytes. Cap is ~9000 tiles so a continent cannot fill the disk.</p>
+      </div>
+    </section>
+
+    <section class="scene">
+      <div>
+        <div class="phone"><img src="screenshots/16-streets.png" alt="Dark OpenStreetMap streets" /></div>
+        <p class="caption">Streets · OpenStreetMap (ODbL), cached like satellite</p>
+      </div>
+      <div class="copy">
+        <h2>Roads without a CARTO key.</h2>
+        <p>Street tiles come from OSM.org with a Fields user-agent. They darken to match the rest of the app. Attribution stays on the map.</p>
+      </div>
+    </section>
+
+    <section class="scene reverse">
+      <div>
+        <div class="phone"><img src="screenshots/19-offline.png" alt="Header shows Offline; satellite still painted" /></div>
+        <p class="caption">Airplane mode · cached tiles + GPS + notes still work</p>
+      </div>
+      <div class="copy">
+        <h2>Coverage gone, map still there.</h2>
+        <p>Places you already viewed or saved keep streets and Sentinel-2. GPS tracks and photos do not need a cell tower.</p>
+      </div>
+    </section>
+  </div>
+</body>
+</html>

@@ -61,6 +61,13 @@ IN-5CG*.gitignore
 # Python virtual environment
 .venv/
 
+# Local CLI binaries for tile packing
+scripts/.tools/
+
+# Optional regional bake — maps are cached on-device, not shipped in the APK
+public/tiles/basemap/satellite/
+public/tiles/basemap/*.geojson
+
 # Test coverage
 coverage/
 

@@ -1,4 +1,4 @@
-# Services (v1.2)
+# Services (v1.4)
 
 Singletons in `src/services/`. Older names (Gazetteer, LocationData, SyncService, DynamicWorld) are **not** in the current client.
 
@@ -18,7 +18,8 @@ Singletons in `src/services/`. Older names (Gazetteer, LocationData, SyncService
 | **ImageService** | `ImageService.ts` | Camera, gallery, EXIF, thumbnails |
 | **ExportService** / **AnnotationExporter** | | GeoJSON, CSV, ZIP, STAC, PBR |
 | **DatasetManager** / **RasterLayerService** / **TileLayerService** | | Bundled CSVs and forest PNG overlays |
-| **DeviceService** / **SeasonService** | | Device id, display name, Indian seasons |
+| **TileCache** | `TileCache.ts` | Cache-first `fields://` protocol; OSM + Sentinel-2 in Cache Storage; Esri live-only |
+| **OfflineBasemap** | `OfflineBasemap.ts` | MapLibre styles; world overview prefetch |
 
 ### CoreStackService (current)
 

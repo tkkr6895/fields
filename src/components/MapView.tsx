@@ -13,6 +13,7 @@ import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import type { CustomLayer, DatasetLayer, LocationData } from '../types';
 import { isWmsBboxTemplate, maplibreWmsTileUrl, resolveWmsTileUrl } from '../services/wmsTiles';
+import { buildMapStyle, prepareOfflineBasemap, PACKED_CENTER, PACKED_ZOOM } from '../services/OfflineBasemap';
 
 export interface MapClickInfo {
   features: Array<{ datasetLayerId: string; properties: Record<string, unknown> }>;
@@ -44,51 +45,12 @@ export interface MapViewRef {
   flyTo: (center: [number, number], zoom?: number) => void;
   resetView: () => void;
   fitBounds: (b: { west: number; south: number; east: number; north: number }, pad?: number) => void;
+  getBounds: () => { west: number; south: number; east: number; north: number } | null;
+  getZoom: () => number;
 }
 
-const DARK_STYLE: maplibregl.StyleSpecification = {
-  version: 8,
-  name: 'Dark',
-  sources: {
-    'carto-dark': {
-      type: 'raster',
-      tiles: [
-        'https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png',
-        'https://b.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png',
-        'https://c.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png',
-      ],
-      tileSize: 256,
-      attribution:
-        '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
-    },
-  },
-  layers: [
-    { id: 'canvas', type: 'background', paint: { 'background-color': '#12161c' } },
-    { id: 'carto-dark', type: 'raster', source: 'carto-dark' },
-  ],
-};
-
-const SATELLITE_STYLE: maplibregl.StyleSpecification = {
-  version: 8,
-  name: 'Satellite',
-  sources: {
-    'esri-satellite': {
-      type: 'raster',
-      tiles: [
-        'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-      ],
-      tileSize: 256,
-      attribution: 'Tiles © Esri',
-    },
-  },
-  layers: [
-    { id: 'canvas', type: 'background', paint: { 'background-color': '#1a2a1a' } },
-    { id: 'esri-satellite', type: 'raster', source: 'esri-satellite' },
-  ],
-};
-
-const DEFAULT_CENTER: [number, number] = [75.5, 13.0];
-const DEFAULT_ZOOM = 8;
+const DEFAULT_CENTER: [number, number] = PACKED_CENTER;
+const DEFAULT_ZOOM = PACKED_ZOOM;
 
 function buildAccuracyCircle(lon: number, lat: number, radiusMeters: number): GeoJSON.Feature<GeoJSON.Polygon> {
   const points = 32;
@@ -149,6 +111,12 @@ const MapView = forwardRef<MapViewRef, MapViewProps>(
       fitBounds: (b, pad = 48) => {
         map.current?.fitBounds([[b.west, b.south], [b.east, b.north]], { padding: pad, duration: 800, maxZoom: 15 });
       },
+      getBounds: () => {
+        if (!map.current) return null;
+        const b = map.current.getBounds();
+        return { west: b.getWest(), south: b.getSouth(), east: b.getEast(), north: b.getNorth() };
+      },
+      getZoom: () => map.current?.getZoom() ?? DEFAULT_ZOOM,
     }), []);
 
     const syncAoiAndNotes = useCallback(() => {
@@ -338,14 +306,15 @@ const MapView = forwardRef<MapViewRef, MapViewProps>(
 
     useEffect(() => {
       if (!mapContainer.current || map.current) return;
+      void prepareOfflineBasemap();
       map.current = new maplibregl.Map({
         container: mapContainer.current,
-        style: basemap === 'dark' ? DARK_STYLE : SATELLITE_STYLE,
+        style: buildMapStyle(basemap),
         center,
         zoom,
         attributionControl: { compact: true },
         maxZoom: 18,
-        minZoom: 4,
+        minZoom: 2,
         touchZoomRotate: true,
         touchPitch: false,
         dragRotate: false,
@@ -391,9 +360,10 @@ const MapView = forwardRef<MapViewRef, MapViewProps>(
 
     useEffect(() => {
       if (!map.current) return;
-      map.current.setStyle(basemap === 'dark' ? DARK_STYLE : SATELLITE_STYLE);
+      map.current.setStyle(buildMapStyle(basemap));
       map.current.once('styledata', () => syncRasterLayers());
-    }, [basemap, syncRasterLayers]);
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [basemap]);
 
     useEffect(() => { syncRasterLayers(); }, [syncRasterLayers]);
     useEffect(() => { syncAoiAndNotes(); }, [aoiLayers, noteMarkers, trackPoints, syncAoiAndNotes]);

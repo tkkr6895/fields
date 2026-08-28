@@ -24,7 +24,10 @@ const config: CapacitorConfig = {
     Camera: {
       permissions: ['camera', 'photos']
     },
-    Network: {}
+    Network: {},
+    CapacitorHttp: {
+      enabled: true,
+    },
   }
 };
 

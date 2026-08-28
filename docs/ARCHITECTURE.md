@@ -1,11 +1,11 @@
-# Architecture (v1.3)
+# Architecture (v1.4)
 
 Fields is an offline-first PWA (and Capacitor Android wrapper) for **GPS tracks** and **ground notes**. Maps are optional colouring.
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │  Header (offline / REC)              Settings (AOI, API key) │
-│  MapLibre: track line + notes                                │
+│  MapLibre: cache-first OSM + Sentinel-2 (Save maps) + Esri when online        │
 │  Track HUD: Start / Pause / Save                             │
 │  Bottom: Journal | camera | Maps                             │
 └─────────────────────────────────────────────────────────────┘
@@ -26,7 +26,7 @@ Fields is an offline-first PWA (and Capacitor Android wrapper) for **GPS tracks*
 
 ## Map
 
-- Basemaps: CARTO dark, Esri World Imagery.
+- Basemaps: OpenStreetMap streets (cached on device), Sentinel-2 (cached), Esri World Imagery (live only).
 - Live track: MapLibre line from on-device GPS fixes (accuracy-filtered).
 - IndiaSAT / CoRE rasters: WMS via `wmsTiles.ts`. Mutually exclusive with Tessera colour.
 - Tessera: one packed JPEG per 0.1° tile as an image overlay.

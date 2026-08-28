@@ -10,12 +10,15 @@ The running app does **not** call Google Earth Engine. Land cover is **IndiaSAT*
 | GBIF | `https://api.gbif.org/v1` | None | Species name hints |
 | Nominatim | `https://nominatim.openstreetmap.org` | None | “Go to a place” in Settings |
 | Tessera proxy | optional `VITE_TESSERA_PROXY_URL` | None | 128-d sample; tile id is computed on device either way |
-| CARTO / Esri | public tile URLs | None | Dark / satellite basemaps |
+| OpenStreetMap / Esri | public tile URLs | None | Live streets / sharp aerial when online |
+| OpenStreetMap | cached on device | None | Offline streets for any viewed or saved area (ODbL) |
+| EOX Sentinel-2 cloudless | cached on device | None | Offline satellite (~10 m) for any viewed or saved area |
 
 Dev (Vite) rewrites:
 
 - `/api/corestack` → CoRE `/api/v1`
 - `/api/geoserver` → GeoServer `/geoserver`
+- `/api/s2` → EOX Sentinel-2 cloudless WMTS (avoids CORS in the browser)
 
 Production APK / hosted PWA should call the HTTPS origins above (see [PENDING_ISSUES.md](./PENDING_ISSUES.md) for CORS).
 

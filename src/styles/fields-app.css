@@ -248,6 +248,70 @@
   pointer-events: none;
 }
 
+.save-maps-btn {
+  position: absolute;
+  left: 12px;
+  bottom: 132px;
+  z-index: 100;
+  border: 1px solid var(--fields-border);
+  background: var(--fields-bg);
+  color: var(--fields-text);
+  border-radius: 999px;
+  padding: 8px 12px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.35);
+}
+
+.save-maps-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.save-maps-sheet {
+  width: min(100vw, 480px);
+  max-height: min(88vh, 640px);
+  overflow: auto;
+  background: #15171f;
+  color: var(--fields-text);
+  border: 0;
+  border-radius: 16px 16px 0 0;
+  padding: 16px 16px 28px;
+}
+
+.save-maps-sheet progress {
+  width: 100%;
+  accent-color: #7cb87c;
+}
+
+.save-maps-sheet header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.save-maps-sheet h2 { font-size: 1.05rem; margin: 0; }
+.save-maps-sheet p { font-size: 0.85rem; color: var(--fields-text-dim); line-height: 1.4; }
+.save-maps-est { font-size: 0.8rem; }
+.save-maps-sheet .btn--primary { width: 100%; margin-top: 8px; }
+.save-maps-list { list-style: none; padding: 12px 0 0; margin: 0; }
+.save-maps-list li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0;
+  border-top: 1px solid var(--fields-border);
+  font-size: 0.78rem;
+}
+
 /* ─── ValidationCapture modal ───────────────────────────────────────── */
 .vc-overlay {
   position: fixed; inset: 0;

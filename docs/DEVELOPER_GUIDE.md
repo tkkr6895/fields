@@ -40,7 +40,7 @@ On device, paste the CoRE key in **Settings → Keys & live maps** if you did no
 
 | Command | What |
 | --- | --- |
-| `npm run dev` | Vite on port 5173, proxies `/api/corestack` and `/api/geoserver` |
+| `npm run dev` | Vite on port 5173, proxies `/api/corestack`, `/api/geoserver`, `/api/s2` |
 | `npm run dev:full` | Vite + optional Tessera Python proxy |
 | `npm run build` | `tsc` then production bundle |
 | `npm run android:sync` | Copy `dist/` into the Capacitor Android project |
@@ -50,6 +50,9 @@ Dev proxies (see `vite.config.ts`):
 
 - `/api/corestack` → `https://api-doc.core-stack.org/api/v1` (`X-API-Key`)
 - `/api/geoserver` → `https://geoserver.core-stack.org:8443/geoserver` (IndiaSAT WMS)
+- `/api/s2` → EOX Sentinel-2 cloudless WMTS (browser CORS bypass)
+
+The APK does not ship planet tiles. MapLibre loads OpenStreetMap streets and Sentinel-2 through a cache-first `fields://` protocol (`src/services/TileCache.ts`). Esri World Imagery is live-only.
 
 ## How a note is saved
 
@@ -60,7 +63,7 @@ Dev proxies (see `vite.config.ts`):
 
 ## Android
 
-Preferred: push `main` and download the `fields-debug` artifact from [Actions](https://github.com/tkkr6895/fields/actions).
+Preferred: push `main` and download the **Fields** artifact from [Actions](https://github.com/tkkr6895/fields/actions). Unzip, then tap `Fields.apk`.
 
 Locally: `npm run build && npx cap sync android`, then Android Studio or `./gradlew assembleDebug`.
 

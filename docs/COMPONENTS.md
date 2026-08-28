@@ -1,4 +1,4 @@
-# Components (v1.2)
+# Components (v1.4)
 
 React + TypeScript in `src/components/`.
 
@@ -11,7 +11,8 @@ React + TypeScript in `src/components/`.
 | **SettingsPanel** | Place search, AOI import, CoRE key, Tessera URL, storage |
 | **FieldLog** | List, detail, export, manual sync |
 | **DataExportPanel** | GeoJSON / CSV / GeoAI ZIP / STAC / PBR |
-| **Onboarding** | First-launch slides |
+| **TrackHud** | Start / pause / save GPS track |
+| **SaveMapsSheet** | Prefetch OSM + Sentinel-2 for the current view |
 | **Header** / **BottomNav** / **MapControls** | Chrome |
 | **ObservationDetailModal** | One note + enrichment |
 | **ValidationCapture** | Legacy longer capture (not on the + button) |

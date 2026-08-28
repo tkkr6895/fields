@@ -56,10 +56,10 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ onClose, onFlyTo, onAoiIm
     localStorage.getItem('fields_default_basemap') || 'dark'
   );
   const [defaultCenterStr, setDefaultCenterStr] = useState(
-    localStorage.getItem('fields_default_center') || '75.5, 13.0'
+    localStorage.getItem('fields_default_center') || '75.22, 12.75'
   );
   const [defaultZoom, setDefaultZoom] = useState(
-    parseInt(localStorage.getItem('fields_default_zoom') || '8')
+    parseInt(localStorage.getItem('fields_default_zoom') || '11')
   );
   const [mapPrefsSaved, setMapPrefsSaved] = useState(false);
   const [coreKey, setCoreKey] = useState(getCoreStackApiKey());

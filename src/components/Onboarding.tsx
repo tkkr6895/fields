@@ -7,8 +7,8 @@ interface OnboardingProps {
 
 const SLIDES = [
   {
-    title: 'Walk, even without maps',
-    body: 'Start a track. The phone records GPS as precisely as it can — satellite, Wi-Fi, or cell — and keeps the trail on this device. No signal required.',
+    title: 'Maps for anywhere, kept on the phone',
+    body: 'The install stays small. Pan the planet while you have signal — streets and Sentinel-2 stay on the device. Tap Save maps before a hike. Sharp aerial (Esri) needs coverage.',
   },
   {
     title: 'Mark what you see',

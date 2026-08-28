@@ -9,6 +9,7 @@ import SpotBar from './components/SpotBar';
 import QuickCapture from './components/QuickCapture';
 import Onboarding from './components/Onboarding';
 import TrackHud from './components/TrackHud';
+import SaveMapsSheet from './components/SaveMapsSheet';
 import { useNetworkStatus } from './hooks/useNetworkStatus';
 import { GeoLocationService } from './services/GeoLocationService';
 import { trackRecorder } from './services/TrackRecorder';
@@ -19,6 +20,7 @@ import { rasterLayerService } from './services/RasterLayerService';
 import { coreStackService, type CoreStackFact } from './services/CoreStackService';
 import { tesseraTileForPoint, resolveTesseraPreview, type TesseraPreview } from './services/TesseraService';
 import { customLayerManager } from './services/CustomLayerManager';
+import { PACKED_CENTER, PACKED_ZOOM } from './services/OfflineBasemap';
 import { isFirstLaunchCompleted } from './services/DeviceService';
 import { PREDICTION_SOURCES } from './services/PredictionService';
 import type { CustomLayer, FieldTrack, LocationData, Observation, DatasetLayer } from './types';
@@ -27,7 +29,7 @@ import './styles/fields-app.css';
 
 type TabType = 'map' | 'layers' | 'log';
 
-const WG_DEFAULT_CENTER: [number, number] = [75.5, 13.0];
+const WG_DEFAULT_CENTER: [number, number] = PACKED_CENTER;
 
 const FOREST_LAYERS = [
   { id: 'raster_natural_forest_80', label: 'Natural Forest (≥80%)', color: '#2d6a4f' },
@@ -46,7 +48,7 @@ function parseStoredCenter(): [number, number] {
 
 function App() {
   const [center, setCenter] = useState<[number, number]>(parseStoredCenter);
-  const [zoom, setZoom] = useState(() => parseInt(localStorage.getItem('fields_default_zoom') || '8', 10) || 8);
+  const [zoom, setZoom] = useState(() => parseInt(localStorage.getItem('fields_default_zoom') || String(PACKED_ZOOM), 10) || PACKED_ZOOM);
   const [basemap, setBasemap] = useState<'dark' | 'satellite'>(
     (localStorage.getItem('fields_default_basemap') as 'dark' | 'satellite') || 'satellite'
   );
@@ -81,6 +83,8 @@ function App() {
   const [pinnedLocation, setPinnedLocation] = useState<LocationData | null>(null);
   const focusLocation = pinnedLocation ?? currentLocation;
 
+  const [saveMapsOpen, setSaveMapsOpen] = useState(false);
+  const [saveMapBounds, setSaveMapBounds] = useState<{ west: number; south: number; east: number; north: number } | null>(null);
   const [pendingSync, setPendingSync] = useState(0);
 
   const { isOnline } = useNetworkStatus();
@@ -213,7 +217,9 @@ function App() {
     }
   }, []);
 
-  const handleResetView = useCallback(() => mapRef.current?.resetView(), []);
+  const handleResetView = useCallback(() => {
+    mapRef.current?.flyTo(PACKED_CENTER, PACKED_ZOOM);
+  }, []);
   const handleBasemapToggle = useCallback(() => setBasemap(p => p === 'dark' ? 'satellite' : 'dark'), []);
 
   const handleForestToggle = useCallback((layerId: string) => {
@@ -386,8 +392,13 @@ function App() {
           onResetView={handleResetView}
         />
 
-        <button className="basemap-toggle" onClick={handleBasemapToggle} title={`Switch to ${basemap === 'dark' ? 'satellite' : 'dark'}`}>
-          {basemap === 'dark' ? '🛰️' : '🌙'}
+        <button
+          className="basemap-toggle"
+          onClick={handleBasemapToggle}
+          aria-label={basemap === 'dark' ? 'Switch to satellite' : 'Switch to streets'}
+          title={basemap === 'dark' ? 'Satellite — Esri when online, Sentinel-2 kept on the phone' : 'Streets — OpenStreetMap, kept as you pan'}
+        >
+          {basemap === 'dark' ? '🛰️' : '🗺️'}
         </button>
 
         {activeTab === 'map' && (
@@ -428,11 +439,35 @@ function App() {
           </button>
         )}
 
+        {activeTab === 'map' && (
+          <button
+            type="button"
+            className="save-maps-btn"
+            onClick={() => {
+              setSaveMapBounds(mapRef.current?.getBounds() ?? null);
+              setSaveMapsOpen(true);
+            }}
+            title="Keep this view on the phone"
+          >
+            Save maps
+          </button>
+        )}
+
+        {saveMapsOpen && (
+          <SaveMapsSheet
+            bounds={saveMapBounds}
+            zoom={zoom}
+            online={isOnline}
+            onClose={() => setSaveMapsOpen(false)}
+            onSaved={(msg) => { setToast(msg); setSaveMapsOpen(false); }}
+          />
+        )}
+
         {toast && <div className="fields-toast" role="status">{toast}</div>}
 
         {!isOnline && (
           <div className="fields-offline-banner" role="status">
-            GPS, notes, and photos work. Satellite and IndiaSAT need signal.
+            Offline. Streets and Sentinel-2 show for places you already viewed or saved. GPS, notes, and photos still work.
           </div>
         )}
 
@@ -561,7 +596,7 @@ const OverlayPanel: React.FC<{
         <button className="panel-close" onClick={onClose}>✕</button>
       </div>
       <div className="overlay-content">
-        <p className="overlay-lede">Optional colouring. Your GPS track and photos are the record — these maps can wait until you have signal.{!isOnline ? ' You are offline: IndiaSAT and live Tessera will not load. Bundled forest rasters still work.' : ''}</p>
+        <p className="overlay-lede">Optional colouring. Streets and satellite for any place are saved on this phone as you go (or via Save maps). IndiaSAT needs signal.{!isOnline ? ' You are offline: saved maps, forest rasters, GPS, and notes still work.' : ''}</p>
         <section className="overlay-card">
           <header>
             <div>

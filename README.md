@@ -44,14 +44,17 @@ Details: [BUILD_APK.md](./BUILD_APK.md).
 
 ## What works offline
 
+The APK does not contain the planet. Maps live in **phone storage**:
+
 | On the phone with no signal | Needs coverage |
 | --- | --- |
-| GPS track, pause / save | Esri satellite / CARTO dark basemap tiles |
-| Notes, tags, species, photos | IndiaSAT / CoRE land-cover colour |
-| Track line and note pins on a blank canvas | Live Tessera colour (packed Sulya preview still works) |
-| Bundled Western Ghats forest rasters | Place search (“Sulya, Karnataka”) |
-| Imported AOIs (GeoJSON / KML / CSV already on the phone) | Weather, GBIF, tehsil lookup |
-| Share pack (zip is built on-device) | Sending the zip (email / Drive needs a network) |
+| Streets and Sentinel-2 for places you already viewed or **Save maps** | Sharp Esri aerial (not stored — licence) |
+| A small world overview (first launch, ~few MB) | IndiaSAT / CoRE land-cover colour |
+| GPS track, notes, tags, photos | Live Tessera colour (packed Sulya preview still works) |
+| Bundled Western Ghats forest rasters | Place search, weather, GBIF |
+| Share pack (zip is built on-device) | Sending the zip (email / Drive) |
+
+Tap **Save maps** on the screen you will walk. Pan anywhere on Earth while you still have signal and those tiles stay.
 
 ## Load areas of interest
 
@@ -69,6 +72,9 @@ Details: [BUILD_APK.md](./BUILD_APK.md).
 | --- | --- | --- |
 | Your GPS track | Phone GNSS + network, stored locally | Core |
 | Notes / photos | Waypoints on or off a track | Core |
+| OpenStreetMap streets | Cached on the phone as you pan or via Save maps (ODbL) | Any place you kept |
+| Sentinel-2 satellite | Cached EOX cloudless mosaic (Copernicus) | Any place you kept |
+| Esri World Imagery | Live only when online | Optional sharpness |
 | IndiaSAT / CoRE LULC | Annual ~30 m land cover for the tehsil | Optional, key + signal |
 | Tessera colour | One 0.1° RGB fingerprint (bands 30/60/90) | Optional |
 | Forest vs plantation | Bundled Western Ghats rasters | Optional, works offline |
@@ -97,4 +103,4 @@ npx cap sync android
 
 ## Documentation
 
-Current docs live in [`docs/README.md`](docs/README.md). Walkthroughs: [`example-flows/`](example-flows/).
+Current docs live in [`docs/README.md`](docs/README.md). Walkthroughs: [`example-flows/`](example-flows/) (IndiaSAT, Tessera, [offline maps](./example-flows/03-offline-maps.html)).

@@ -27,7 +27,7 @@ There is **no** Google Earth Engine OAuth in the current app.
 - Open-Meteo (weather)
 - GBIF (species hints)
 - Nominatim (place search)
-- CARTO / Esri (basemaps)
+- OpenStreetMap / Esri (basemaps)
 
 No analytics SDK. Review notes before you share a ZIP.
 

@@ -4,6 +4,15 @@ All notable changes to the Fields app are documented in this file.
 
 ---
 
+## [1.4.0] — 2026-08-29: Planet maps on the phone, not in the APK
+
+- **Save maps** keeps the current view (OpenStreetMap streets + Sentinel-2 cloudless) in phone Cache Storage. The APK stays small; you pan anywhere on Earth while you have signal, or save the walk before you lose it.
+- **Streets** use OpenStreetMap raster tiles (ODbL) with a darkened MapLibre style. CARTO’s free raster endpoint now watermarks without a key, so it is no longer used.
+- **Satellite** stacks cached Sentinel-2 (~10 m, EOX / Copernicus) under live Esri World Imagery (not stored — licence). Offline, Esri drops away and Sentinel-2 remains for places you viewed or saved.
+- First launch fills a few MB of world overview (z0–z3). Native Android uses Capacitor HTTP so EOX tiles work without CORS.
+
+---
+
 ## [1.2.0] — 2026-08-22: IndiaSAT-only maps, photo-first trees
 
 - **Removed Google Earth Engine / Dynamic World.** Land cover is IndiaSAT via CoRE Stack GeoServer (WMS tiles + GetFeatureInfo).

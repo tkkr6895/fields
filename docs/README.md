@@ -18,4 +18,4 @@ This folder is reference material for people changing the code.
 | [plan/](./plan/) | Original spec (historical) |
 | [archive/](./archive/) | Demo scripts and session notes (often outdated) |
 
-**Current product (v1.3):** offline GPS tracks plus notes. Two optional map loops remain — [IndiaSAT / CoRE validation](../example-flows/01-indiasat-validation.html) and [Tessera tree-species labelling](../example-flows/02-tessera-tree-species.html). Tracks and notes work with no maps at all. Install the phone build from the [sideload release](https://github.com/tkkr6895/fields/releases/tag/sideload), not the Actions zip.
+**Current product (v1.3):** offline GPS tracks plus notes. Two optional map loops remain — [IndiaSAT / CoRE validation](../example-flows/01-indiasat-validation.html) and [Tessera tree-species labelling](../example-flows/02-tessera-tree-species.html). Tracks and notes work with no maps at all. Install from [Actions → Build Android APK](https://github.com/tkkr6895/fields/actions/workflows/build-android.yml): download the **Fields** artifact, unzip, tap `Fields.apk`.

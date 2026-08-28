@@ -66,6 +66,7 @@ export function exportTracksToGeoJSON(tracks: FieldTrack[]): string {
       )),
     },
     properties: {
+      kind: 'track',
       id: track.id,
       name: track.name,
       startedAt: track.startedAt,
@@ -79,6 +80,76 @@ export function exportTracksToGeoJSON(tracks: FieldTrack[]): string {
   }));
 
   return JSON.stringify({ type: 'FeatureCollection', features }, null, 2);
+}
+
+export function exportTrackPointsToCSV(tracks: FieldTrack[]): string {
+  const headers = [
+    'track_id', 'track_name', 'seq', 'timestamp', 'iso_time',
+    'lat', 'lon', 'accuracy_m', 'altitude_m', 'speed_mps', 'heading_deg', 'simulated',
+  ];
+  const rows = tracks.flatMap((track) =>
+    track.points.map((p, seq) => [
+      track.id,
+      `"${track.name.replace(/"/g, '""')}"`,
+      seq + 1,
+      p.timestamp,
+      iso(p.timestamp),
+      p.lat.toFixed(7),
+      p.lon.toFixed(7),
+      p.accuracy,
+      p.altitude ?? '',
+      p.speed ?? '',
+      p.heading ?? '',
+      p.simulated ? 1 : 0,
+    ].join(','))
+  );
+  return [headers.join(','), ...rows].join('\n');
+}
+
+export function exportFieldGeoJSON(tracks: FieldTrack[], notes: Observation[]): string {
+  const trackFeatures: GeoJSON.Feature[] = JSON.parse(exportTracksToGeoJSON(tracks)).features;
+  const noteFeatures: GeoJSON.Feature[] = notes.map((obs) => ({
+    type: 'Feature',
+    geometry: {
+      type: 'Point',
+      coordinates: obs.location.altitude != null
+        ? [obs.location.lon, obs.location.lat, obs.location.altitude]
+        : [obs.location.lon, obs.location.lat],
+    },
+    properties: {
+      kind: 'note',
+      id: obs.id,
+      timestamp: obs.timestamp,
+      observation_type: obs.observationType || 'note',
+      tags: (obs.tags || []).join('|'),
+      notes: obs.notes,
+      accuracy_m: obs.location.accuracy,
+      track_id: obs.trackId ?? null,
+      species: obs.fieldData?.dominantSpecies ?? null,
+      forest_type: obs.fieldData?.forest?.type ?? null,
+      photo: obs.image?.blobId ? `images/${obs.image.blobId}.jpg` : null,
+    },
+  }));
+  return JSON.stringify({ type: 'FeatureCollection', features: [...trackFeatures, ...noteFeatures] }, null, 2);
+}
+
+export function exportPackReadme(trackCount: number, noteCount: number, imageCount: number): string {
+  return `Fields export
+=============
+${new Date().toISOString()}
+${trackCount} track(s), ${noteCount} note(s), ${imageCount} photo(s)
+
+Open in analysis tools
+- QGIS / ArcGIS: field.geojson (tracks as lines, notes as points)
+- Gaia / Google Earth / Garmin: tracks.gpx
+- Spreadsheet / R / pandas: observations.csv and tracks.csv (one GPS fix per row)
+- Raw: observations.json
+
+tracks.csv columns: track_id, seq, iso_time, lat, lon, accuracy_m, altitude_m, speed_mps, heading_deg
+Photos are in images/ and named by the photo id in observations.csv / field.geojson.
+
+Coordinates are WGS84. accuracy_m is the phone's reported 68% horizontal error.
+`;
 }
 
 export function formatDistance(meters: number): string {

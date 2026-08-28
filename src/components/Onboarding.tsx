@@ -16,7 +16,7 @@ const SLIDES = [
   },
   {
     title: 'Share when you are back',
-    body: 'Journal → Share pack. You get GPX for the hike, GeoJSON and CSV for notes, and photos. Maps (IndiaSAT, Tessera) are optional colouring, never a requirement.',
+    body: 'Journal → Share pack. One zip: tracks.gpx (Gaia / Earth), field.geojson (QGIS), tracks.csv + observations.csv (spreadsheet), and photos. Maps are optional colouring, never a requirement.',
   },
 ];
 

@@ -53,14 +53,16 @@ jobs:
         run: |
           mkdir -p dist-apk
           cp android/app/build/outputs/apk/release/app-release.apk dist-apk/Fields.apk
-          ls -lh dist-apk/Fields.apk
+          cp .github/INSTALL-APK.txt dist-apk/INSTALL.txt
+          ls -lh dist-apk/
 
-      - name: Upload Fields.apk
+      - name: Upload Fields APK (Actions)
         uses: actions/upload-artifact@v4
         with:
-          name: Fields-apk
-          path: dist-apk/Fields.apk
+          name: Fields
+          path: dist-apk/
           if-no-files-found: error
+          compression-level: 0
           retention-days: 30
 
       - name: Publish sideload release
@@ -73,14 +75,14 @@ jobs:
           fail_on_unmatched_files: true
           make_latest: true
           body: |
-            Direct APK for the phone. **Do not install the Actions zip.**
+            Signed sideload APK. GitHub Actions always zips artifacts — that is expected.
+
+            **From Actions (typical on a work laptop):** Artifacts → **Fields** → unzip `Fields.zip` → tap **Fields.apk**. Do not install the zip.
 
             1. Uninstall any older Fields app first (debug builds used a different signature).
-            2. Download **Fields.apk** from this release (not from Actions artifacts).
-            3. Open the file on the phone → Allow from this source → Install.
-            4. If Play Protect warns, choose Install anyway. This is a sideload build, not Play Store.
-
-            Grant **precise location** (and **Allow all the time** if you hike with the screen off). Camera is optional.
+            2. Open Fields.apk → Allow from this source → Install.
+            3. If Play Protect warns, choose Install anyway.
+            4. Grant **precise location** (and **Allow all the time** if you hike with the screen off). Camera is optional.
 
       - name: Create GitHub Release (version tags)
         if: startsWith(github.ref, 'refs/tags/')

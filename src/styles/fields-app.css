@@ -230,6 +230,24 @@
   pointer-events: none;
 }
 
+.fields-offline-banner {
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(92vw, 440px);
+  z-index: 55;
+  background: rgba(18, 22, 18, 0.92);
+  color: #dce8dc;
+  border: 1px solid rgba(255, 193, 7, 0.35);
+  border-radius: 10px;
+  padding: 8px 12px;
+  font-size: 0.78rem;
+  line-height: 1.35;
+  text-align: center;
+  pointer-events: none;
+}
+
 /* ─── ValidationCapture modal ───────────────────────────────────────── */
 .vc-overlay {
   position: fixed; inset: 0;

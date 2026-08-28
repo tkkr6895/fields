@@ -269,11 +269,16 @@ export async function exportToGeoJSON(observations: Observation[]): Promise<stri
     properties: {
       id: obs.id,
       timestamp: obs.timestamp,
-      validation: obs.userValidation,
+      observation_type: obs.observationType || 'note',
+      tags: (obs.tags || []).join('|'),
       notes: obs.notes,
       accuracy_m: obs.location.accuracy,
       altitude_m: obs.location.altitude ?? null,
       track_id: obs.trackId ?? null,
+      species: obs.fieldData?.dominantSpecies ?? null,
+      forest_type: obs.fieldData?.forest?.type ?? null,
+      validation: obs.userValidation,
+      photo: obs.image?.blobId ? `images/${obs.image.blobId}.jpg` : null,
       ...Object.entries(obs.datasetValues || {}).reduce((acc, [layerId, values]) => {
         Object.entries(values).forEach(([field, value]) => {
           acc[`${layerId}_${field}`] = value;
@@ -295,9 +300,6 @@ export async function exportToGeoJSON(observations: Observation[]): Promise<stri
 }
 
 export async function exportToCSV(observations: Observation[]): Promise<string> {
-  if (observations.length === 0) return '';
-
-  // Collect all possible fields
   const allFields = new Set<string>();
   observations.forEach(obs => {
     Object.entries(obs.datasetValues || {}).forEach(([layerId, values]) => {
@@ -319,6 +321,8 @@ export async function exportToCSV(observations: Observation[]): Promise<string> 
     'corestack_state', 'corestack_district', 'corestack_tehsil',
     ...Array.from(allFields),
   ];
+
+  if (observations.length === 0) return `${headers.join(',')}\n`;
 
   const coverPct = (obs: Observation, cover: string) =>
     obs.fieldData?.coverComposition?.find(c => c.cover === cover)?.percent ?? '';

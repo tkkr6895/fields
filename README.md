@@ -6,7 +6,7 @@ This repository **is** the app (`https://github.com/tkkr6895/fields`). There is 
 
 | I want to… | Go here |
 | --- | --- |
-| Put it on a phone | **[Fields.apk](https://github.com/tkkr6895/fields/releases/tag/sideload)** · [BUILD_APK.md](./BUILD_APK.md) |
+| Put it on a phone | [GitHub Actions artifact](https://github.com/tkkr6895/fields/actions/workflows/build-android.yml) · [BUILD_APK.md](./BUILD_APK.md) |
 | Walk a field day | [Field loop](#field-loop) below · [example-flows/](./example-flows/) |
 | Run it in a browser | [Develop](#develop) |
 | Change code | [docs/DEVELOPER_GUIDE.md](./docs/DEVELOPER_GUIDE.md) |
@@ -16,19 +16,42 @@ This repository **is** the app (`https://github.com/tkkr6895/fields`). There is 
 1. **Start track.** Red button on the map. The phone records GPS (satellite, plus Wi-Fi/cell if they exist) and draws the line. Keep Fields running; allow **precise location**, and **Allow all the time** if the phone will be in a pocket.
 2. **Mark a spot.** Camera button. Photo is optional. Add a tag (tree, water, crop, built, trail), a name if you know it, a line of text. During a track this is a waypoint; without a track it is still a geolocated note.
 3. **Maps are optional.** IndiaSAT land-cover colour and Tessera landscape colour live under **Maps**. They need signal and a CoRE key. They never block saving a track or a note.
-4. **Share.** Journal → **Share pack**. One zip: `tracks.gpx` (Gaia / Google Earth / QGIS), `tracks.geojson`, notes as GeoJSON + CSV, photos.
+4. **Share.** Journal → **Share pack**. One zip ready for analysis:
+
+| File | Open in |
+| --- | --- |
+| `field.geojson` | QGIS / ArcGIS (tracks as lines, notes as points) |
+| `tracks.gpx` | Gaia, Google Earth, Garmin |
+| `tracks.csv` | Spreadsheet / R / pandas (one GPS fix per row) |
+| `observations.csv` | Spreadsheet (one note per row, tags, species, photo id) |
+| `images/` | Photos named by the id in the CSV / GeoJSON |
+| `README.txt` | Same cheat sheet, inside the zip |
 
 Ground-truthing a model is the same note flow: turn IndiaSAT on when you have signal, photograph the spot, tap Looks right / Wrong class.
 
 ## Install on the phone
 
-Use the **release APK**, not the Actions zip:
+GitHub always wraps the Actions download in a zip. That is normal. **Do not try to install the zip.**
 
 1. Uninstall older Fields if install fails (“App not installed” is almost always a leftover debug signature).
-2. Download [Fields.apk](https://github.com/tkkr6895/fields/releases/tag/sideload).
-3. Open the file → allow from this source → Install. Play Protect: **Install anyway**.
+2. Phone browser: [Actions → Build Android APK](https://github.com/tkkr6895/fields/actions/workflows/build-android.yml) → latest **green** run → **Artifacts** → **Fields**.
+3. You get `Fields.zip`. Open it in Files / My Files and **extract**.
+4. Tap **Fields.apk** (not `INSTALL.txt`, not the zip).
+5. Allow from this source. Play Protect: **Install anyway**.
+6. Allow **precise location**. For a phone in a pocket, **Allow all the time**.
 
 Details: [BUILD_APK.md](./BUILD_APK.md).
+
+## What works offline
+
+| On the phone with no signal | Needs coverage |
+| --- | --- |
+| GPS track, pause / save | Esri satellite / CARTO dark basemap tiles |
+| Notes, tags, species, photos | IndiaSAT / CoRE land-cover colour |
+| Track line and note pins on a blank canvas | Live Tessera colour (packed Sulya preview still works) |
+| Bundled Western Ghats forest rasters | Place search (“Sulya, Karnataka”) |
+| Imported AOIs (GeoJSON / KML / CSV already on the phone) | Weather, GBIF, tehsil lookup |
+| Share pack (zip is built on-device) | Sending the zip (email / Drive needs a network) |
 
 ## Load areas of interest
 

@@ -6,7 +6,7 @@ Clone this repo (the app **is** the repository root — there is no nested `fiel
 
 - Node.js 22+
 - npm 9+
-- Optional: Android Studio + JDK 21 (local APK). GitHub Actions publishes a signed **Fields.apk** on every push to `main` ([sideload release](https://github.com/tkkr6895/fields/releases/tag/sideload)).
+- Optional: Android Studio + JDK 21 (local APK). GitHub Actions publishes a signed **Fields.apk** on every push to `main` ([Actions artifact **Fields**](https://github.com/tkkr6895/fields/actions/workflows/build-android.yml) — unzip, then install `Fields.apk`).
 
 ## Quick start
 

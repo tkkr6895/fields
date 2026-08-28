@@ -57,7 +57,7 @@ const FieldLog: React.FC<FieldLogProps> = ({ onGoToLocation }) => {
         ? await exportService.exportAndShare('share')
         : await exportService.exportAndDownloadWeb();
       setShareMsg(result.success
-        ? `Pack ready — ${result.observationCount} notes, GPX + GeoJSON + photos.`
+        ? `Pack ready — GPX, field.geojson, CSV, photos.`
         : (result.error || 'Share failed'));
     } catch (e) {
       setShareMsg(e instanceof Error ? e.message : 'Share failed');

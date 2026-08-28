@@ -1,0 +1,10 @@
+Uninstall any older Fields app first (debug builds used a different signature).
+
+This download is a ZIP. Do not tap the ZIP to "install".
+
+1. Open the ZIP with Files / My Files / Samsung unzip.
+2. Tap Fields.apk inside.
+3. Allow installs from this source.
+4. If Play Protect warns, choose Install anyway.
+
+Then open Fields and allow precise location (Allow all the time if the phone will be in a pocket).

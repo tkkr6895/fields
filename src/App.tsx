@@ -430,6 +430,12 @@ function App() {
 
         {toast && <div className="fields-toast" role="status">{toast}</div>}
 
+        {!isOnline && (
+          <div className="fields-offline-banner" role="status">
+            GPS, notes, and photos work. Satellite and IndiaSAT need signal.
+          </div>
+        )}
+
         {activeTab === 'layers' && (
           <OverlayPanel
             indiaSatOn={indiaSatOn}
@@ -555,7 +561,7 @@ const OverlayPanel: React.FC<{
         <button className="panel-close" onClick={onClose}>✕</button>
       </div>
       <div className="overlay-content">
-        <p className="overlay-lede">Optional colouring. Your GPS track and photos are the record — these maps can wait until you have signal.</p>
+        <p className="overlay-lede">Optional colouring. Your GPS track and photos are the record — these maps can wait until you have signal.{!isOnline ? ' You are offline: IndiaSAT and live Tessera will not load. Bundled forest rasters still work.' : ''}</p>
         <section className="overlay-card">
           <header>
             <div>

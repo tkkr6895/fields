@@ -62,7 +62,10 @@ const DARK_STYLE: maplibregl.StyleSpecification = {
         '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
     },
   },
-  layers: [{ id: 'carto-dark', type: 'raster', source: 'carto-dark' }],
+  layers: [
+    { id: 'canvas', type: 'background', paint: { 'background-color': '#12161c' } },
+    { id: 'carto-dark', type: 'raster', source: 'carto-dark' },
+  ],
 };
 
 const SATELLITE_STYLE: maplibregl.StyleSpecification = {
@@ -78,7 +81,10 @@ const SATELLITE_STYLE: maplibregl.StyleSpecification = {
       attribution: 'Tiles © Esri',
     },
   },
-  layers: [{ id: 'esri-satellite', type: 'raster', source: 'esri-satellite' }],
+  layers: [
+    { id: 'canvas', type: 'background', paint: { 'background-color': '#1a2a1a' } },
+    { id: 'esri-satellite', type: 'raster', source: 'esri-satellite' },
+  ],
 };
 
 const DEFAULT_CENTER: [number, number] = [75.5, 13.0];

@@ -1,4 +1,4 @@
-# API integrations (v1.2)
+# API integrations (v1.4)
 
 The running app does **not** call Google Earth Engine. Land cover is **IndiaSAT** served by **CoRE Stack GeoServer**.
 

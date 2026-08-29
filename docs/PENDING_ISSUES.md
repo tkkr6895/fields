@@ -1,12 +1,14 @@
-# Pending — needs you (tkkr6895)
+# Known limitations
 
 Last updated: 2026-08-29 (v1.4.0)
 
-## For a field trial
+These are product and platform constraints, not a personal checklist.
 
-1. **Install from Actions.** Download the **Fields** artifact zip, extract, tap `Fields.apk`. Uninstall any older Fields first if the signature changed.
-2. **Save maps before you lose signal.** Pan to the walk, tap **Save maps**. Streets (OpenStreetMap) and Sentinel-2 stay on the phone. Sharp Esri aerial is live-only.
-3. **CoRE Stack API key** in Settings if you want IndiaSAT colour. Notes, GPS, and saved maps work without it.
-4. **Optional Tessera proxy** for embeddings. Packed Sulya previews still work without it.
+- **Esri World Imagery** is online-only. Tiles are not stored (licence). Offline satellite is Sentinel-2 (~10 m) for views already cached or saved.
+- **IndiaSAT / CoRE** WMS needs a network and an API key. On the APK, tiles talk to GeoServer directly (no Vite proxy). CORS or the GeoServer TLS certificate can block colouring; tracks and notes still save.
+- **Tessera** colour for tiles outside the bundled Sulya previews needs an optional proxy. Tile ids are always computed on device.
+- **Nominatim, weather, GBIF** need a network.
+- **Android install** fails if a previous Fields APK used a different signing key. Uninstall that build, then install the new APK.
+- **Cache quota:** Save maps refuses very large bboxes (~9000 tiles). Clearing site data / app storage drops cached maps.
 
-Earth Engine is no longer required.
+Earth Engine is not used.

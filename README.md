@@ -1,89 +1,76 @@
 # Fields
 
-Offline GPS tracks and ground notes. Walk a trail with no signal, drop photos and tags, and optionally check IndiaSAT / Tessera maps when you have coverage.
+Offline-first field app for **GPS tracks** and **ground notes**. Walk without coverage, drop photos and tags, then optionally compare what you saw to IndiaSAT land-cover or Tessera landscape colour when you have a network.
 
-This repository **is** the app (`https://github.com/tkkr6895/fields`). There is no nested `field-validator-app/` folder.
+The git repository **is** the app. There is no nested `field-validator-app/` folder. Clone, `npm install`, `npm run dev`.
 
-| I want to… | Go here |
+| Goal | Where |
 | --- | --- |
-| Put it on a phone | [GitHub Actions artifact](https://github.com/tkkr6895/fields/actions/workflows/build-android.yml) · [BUILD_APK.md](./BUILD_APK.md) |
-| Walk a field day | [Field loop](#field-loop) below · [example-flows/](./example-flows/) |
 | Run it in a browser | [Develop](#develop) |
-| Change code | [docs/DEVELOPER_GUIDE.md](./docs/DEVELOPER_GUIDE.md) |
+| Install on Android | [Releases · sideload](https://github.com/tkkr6895/fields/releases/tag/sideload) · [BUILD_APK.md](./BUILD_APK.md) |
+| Understand the product | [Using the app](#using-the-app) · [example-flows/](./example-flows/) |
+| Change code | [CONTRIBUTING.md](./CONTRIBUTING.md) · [AGENTS.md](./AGENTS.md) · [docs/DEVELOPER_GUIDE.md](./docs/DEVELOPER_GUIDE.md) |
 
-## Field loop
+## Using the app
 
-1. **Start track.** Red button on the map. The phone records GPS (satellite, plus Wi-Fi/cell if they exist) and draws the line. Keep Fields running; allow **precise location**, and **Allow all the time** if the phone will be in a pocket.
-2. **Mark a spot.** Camera button. Photo is optional. Add a tag (tree, water, crop, built, trail), a name if you know it, a line of text. During a track this is a waypoint; without a track it is still a geolocated note.
-3. **Maps are optional.** IndiaSAT land-cover colour and Tessera landscape colour live under **Maps**. They need signal and a CoRE key. They never block saving a track or a note.
-4. **Share.** Journal → **Share pack**. One zip ready for analysis:
+1. **Start track** (red button). The device records GNSS (and network location if available) and draws the line. Keep the app in the foreground, or grant background location if the screen will be off.
+2. **Mark a spot** (camera button). A photo is optional. Add a tag (tree, water, crop, built, trail), a name if known, and a short note. During a track this is a waypoint; otherwise it is still a geolocated observation.
+3. **Maps are optional.** IndiaSAT class colour and Tessera RGB fingerprints live under **Maps**. They need a network (and a CoRE Stack key for IndiaSAT). They never block saving a track or a note.
+4. **Share.** Journal → **Share pack** builds a zip on device:
 
-| File | Open in |
+| File | Typical use |
 | --- | --- |
 | `field.geojson` | QGIS / ArcGIS (tracks as lines, notes as points) |
 | `tracks.gpx` | Gaia, Google Earth, Garmin |
 | `tracks.csv` | Spreadsheet / R / pandas (one GPS fix per row) |
-| `observations.csv` | Spreadsheet (one note per row, tags, species, photo id) |
+| `observations.csv` | Spreadsheet (notes, tags, species, photo id) |
 | `images/` | Photos named by the id in the CSV / GeoJSON |
 | `README.txt` | Same cheat sheet, inside the zip |
 
-Ground-truthing a model is the same note flow: turn IndiaSAT on when you have signal, photograph the spot, tap Looks right / Wrong class.
+Ground-truthing a model uses the same note flow: turn IndiaSAT on when online, photograph the spot, record whether the class looks right.
 
-## Install on the phone
+## Offline maps
 
-GitHub always wraps the Actions download in a zip. That is normal. **Do not try to install the zip.**
+The APK does not contain global imagery. Tiles are stored in the device cache.
 
-1. Uninstall older Fields if install fails (“App not installed” is almost always a leftover debug signature).
-2. Phone browser: [Actions → Build Android APK](https://github.com/tkkr6895/fields/actions/workflows/build-android.yml) → latest **green** run → **Artifacts** → **Fields**.
-3. You get `Fields.zip`. Open it in Files / My Files and **extract**.
-4. Tap **Fields.apk** (not `INSTALL.txt`, not the zip).
-5. Allow from this source. Play Protect: **Install anyway**.
-6. Allow **precise location**. For a phone in a pocket, **Allow all the time**.
-
-Details: [BUILD_APK.md](./BUILD_APK.md).
-
-## What works offline
-
-The APK does not contain the planet. Maps live in **phone storage**:
-
-| On the phone with no signal | Needs coverage |
+| Works with no network | Needs a network |
 | --- | --- |
-| Streets and Sentinel-2 for places you already viewed or **Save maps** | Sharp Esri aerial (not stored — licence) |
-| A small world overview (first launch, ~few MB) | IndiaSAT / CoRE land-cover colour |
-| GPS track, notes, tags, photos | Live Tessera colour (packed Sulya preview still works) |
+| OpenStreetMap streets and Sentinel-2 for views already seen or saved via **Save maps** | Esri World Imagery (not cached; licence) |
+| A small world overview (first launch) | IndiaSAT / CoRE land-cover colour |
+| GPS track, notes, tags, photos | Live Tessera colour (a packed Sulya preview is bundled) |
 | Bundled Western Ghats forest rasters | Place search, weather, GBIF |
-| Share pack (zip is built on-device) | Sending the zip (email / Drive) |
+| Share pack (built on device) | Sending the zip |
 
-Tap **Save maps** on the screen you will walk. Pan anywhere on Earth while you still have signal and those tiles stay.
+Pan while online, or tap **Save maps** on the walk before coverage drops. Offline satellite is Sentinel-2 (~10 m). Esri is sharper and live-only.
 
-## Load areas of interest
+## Map layers
 
-**Settings** on the phone (or in the browser):
-
-| Method | What to bring |
-| --- | --- |
-| **Go to a place** | Type `Sulya, Karnataka`. OpenStreetMap search (needs signal once). |
-| **Import file** | GeoJSON, KML/KMZ, or CSV with lat/lon. Stays on this device. Starter: `public/data/sample-sulya-aoi.geojson`. |
-| **Default view** | Settings → Map preferences → center (`lon, lat`) and zoom. |
-
-## What the maps are
-
-| Layer | What it is | Needed? |
+| Layer | What it is | Required? |
 | --- | --- | --- |
-| Your GPS track | Phone GNSS + network, stored locally | Core |
+| GPS track | Device GNSS + network, stored locally | Core |
 | Notes / photos | Waypoints on or off a track | Core |
-| OpenStreetMap streets | Cached on the phone as you pan or via Save maps (ODbL) | Any place you kept |
-| Sentinel-2 satellite | Cached EOX cloudless mosaic (Copernicus) | Any place you kept |
-| Esri World Imagery | Live only when online | Optional sharpness |
-| IndiaSAT / CoRE LULC | Annual ~30 m land cover for the tehsil | Optional, key + signal |
+| OpenStreetMap streets | Cached as you pan or via Save maps (ODbL) | For any saved view |
+| Sentinel-2 satellite | Cached EOX cloudless mosaic (Copernicus) | For any saved view |
+| Esri World Imagery | Live only | Optional sharpness |
+| IndiaSAT / CoRE LULC | Annual ~30 m land cover for the tehsil | Optional; key + network |
 | Tessera colour | One 0.1° RGB fingerprint (bands 30/60/90) | Optional |
-| Forest vs plantation | Bundled Western Ghats rasters | Optional, works offline |
+| Forest vs plantation | Bundled Western Ghats rasters | Optional; works offline |
 
 No Google Earth Engine. Dynamic World is not used.
 
+## Areas of interest
+
+**Settings:**
+
+| Method | Input |
+| --- | --- |
+| **Go to a place** | Nominatim search (needs network once), e.g. `Sulya, Karnataka` |
+| **Import file** | GeoJSON, KML/KMZ, or CSV with lat/lon. Starter: `public/data/sample-sulya-aoi.geojson` |
+| **Default view** | Map preferences: center (`lon, lat`) and zoom |
+
 ## Develop
 
-Needs Node 22+.
+Requires Node.js 22+.
 
 ```bash
 git clone https://github.com/tkkr6895/fields.git
@@ -94,13 +81,29 @@ cp .env.example .env
 npm run dev
 ```
 
-`npm run dev:full` also starts the optional Tessera proxy.
+Open http://localhost:5173. `npm run dev:full` also starts the optional Tessera proxy.
 
 ```bash
 npm run build
 npx cap sync android
 ```
 
+## Android APK
+
+Every push to `main` builds a signed APK:
+
+- Direct download: [Releases · sideload](https://github.com/tkkr6895/fields/releases/tag/sideload) (`Fields.apk`)
+- CI artifact: [Actions · Build Android APK](https://github.com/tkkr6895/fields/actions/workflows/build-android.yml) (GitHub wraps artifacts in a zip; extract and install `Fields.apk`)
+
+Local build: [BUILD_APK.md](./BUILD_APK.md). Sideloading requires enabling unknown sources. Grant precise location (background location if recording with the screen off). Installing over an APK signed with a different keystore is rejected by Android; uninstall the previous build in that case.
+
 ## Documentation
 
-Current docs live in [`docs/README.md`](docs/README.md). Walkthroughs: [`example-flows/`](example-flows/) (IndiaSAT, Tessera, [offline maps](./example-flows/03-offline-maps.html)).
+| Doc | Audience |
+| --- | --- |
+| [CONTRIBUTING.md](./CONTRIBUTING.md) | First contribution, repo layout, what not to commit |
+| [AGENTS.md](./AGENTS.md) | Short orientation for coding agents |
+| [docs/DEVELOPER_GUIDE.md](./docs/DEVELOPER_GUIDE.md) | Clone, env, scripts, Android |
+| [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md) | Capture vs enrich, map stack |
+| [docs/README.md](./docs/README.md) | Index of remaining reference docs |
+| [example-flows/](./example-flows/) | IndiaSAT, Tessera, [offline maps](./example-flows/03-offline-maps.html) |

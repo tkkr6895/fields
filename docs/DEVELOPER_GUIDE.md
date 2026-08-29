@@ -1,12 +1,12 @@
 # Developer guide
 
-Clone this repo (the app **is** the repository root — there is no nested `field-validator-app/` folder).
+The git repository **is** the app (no nested `field-validator-app/` folder). First contribution: [CONTRIBUTING.md](../CONTRIBUTING.md).
 
 ## Prerequisites
 
 - Node.js 22+
 - npm 9+
-- Optional: Android Studio + JDK 21 (local APK). GitHub Actions publishes a signed **Fields.apk** on every push to `main` ([Actions artifact **Fields**](https://github.com/tkkr6895/fields/actions/workflows/build-android.yml) — unzip, then install `Fields.apk`).
+- Optional: Android Studio + JDK 21 for a local APK. CI publishes [sideload `Fields.apk`](https://github.com/tkkr6895/fields/releases/tag/sideload) on every push to `main`.
 
 ## Quick start
 
@@ -21,7 +21,7 @@ npm run dev
 
 Open http://localhost:5173. For a phone-shaped window use Chrome DevTools → Toggle device toolbar → 390×844.
 
-Worked examples: [IndiaSAT validation](../example-flows/01-indiasat-validation.html) and [Tessera tree species](../example-flows/02-tessera-tree-species.html).
+Worked examples: [IndiaSAT](../example-flows/01-indiasat-validation.html), [Tessera](../example-flows/02-tessera-tree-species.html), [offline maps](../example-flows/03-offline-maps.html).
 
 ## Environment
 
@@ -34,7 +34,7 @@ Worked examples: [IndiaSAT validation](../example-flows/01-indiasat-validation.h
 
 There is **no** Earth Engine / Dynamic World proxy.
 
-On device, paste the CoRE key in **Settings → Keys & live maps** if you did not bake it at build time.
+On device, the CoRE key can also be pasted in **Settings → Keys & live maps**.
 
 ## Scripts
 
@@ -45,6 +45,8 @@ On device, paste the CoRE key in **Settings → Keys & live maps** if you did no
 | `npm run build` | `tsc` then production bundle |
 | `npm run android:sync` | Copy `dist/` into the Capacitor Android project |
 | `npm run android:build` | Production web build + `cap sync` |
+
+`src/services/TileCache.ts` is the cache-first `fields://` protocol (OSM + Sentinel-2). Esri is live-only.
 
 Dev proxies (see `vite.config.ts`):
 
@@ -63,11 +65,11 @@ The APK does not ship planet tiles. MapLibre loads OpenStreetMap streets and Sen
 
 ## Android
 
-Preferred: push `main` and download the **Fields** artifact from [Actions](https://github.com/tkkr6895/fields/actions). Unzip, then tap `Fields.apk`.
+CI: push `main` → [sideload release](https://github.com/tkkr6895/fields/releases/tag/sideload) and Actions artifact **Fields**. See [BUILD_APK.md](../BUILD_APK.md).
 
-Locally: `npm run build && npx cap sync android`, then Android Studio or `./gradlew assembleDebug`.
+Locally: `npm run build && npx cap sync android`, then Android Studio or `./gradlew assembleRelease`.
 
-The installed WebView talks to CoRE and GeoServer **directly** (no Vite proxy). If WMS tiles work in `npm run dev` but not on the phone, it is usually CORS or the GeoServer TLS certificate — collect notes anyway; overlays are optional.
+The WebView calls CoRE and GeoServer **directly** (no Vite proxy). If WMS works in `npm run dev` but not on device, it is usually CORS or GeoServer TLS — notes still save; overlays are optional.
 
 ## Tessera (optional)
 
@@ -76,8 +78,9 @@ The installed WebView talks to CoRE and GeoServer **directly** (no Vite proxy). 
 ## Layout
 
 ```
-src/App.tsx                 Map, layers, capture, log
-src/components/QuickCapture Photo-first tree note
+src/App.tsx                 Map, layers, capture, log, Save maps
+src/components/QuickCapture Photo-first note
+src/services/TileCache.ts          Cache-first OSM + Sentinel-2
 src/services/CoreStackService.ts   X-API-Key, admin + layer URLs
 src/services/IndiaSATService.ts    WMS tiles + GetFeatureInfo
 src/services/SyncEngine.ts         Background enrich

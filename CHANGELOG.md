@@ -4,6 +4,14 @@ All notable changes to the Fields app are documented in this file.
 
 ---
 
+## [1.4.1] — 2026-08-29: Track in the background with a live notification
+
+- Android recording uses the Capgo location foreground service so GPS continues with other apps open or the screen off (grant **Allow all the time**).
+- The shade notification updates with **distance, elapsed time, note count, and GPS accuracy**. Pause keeps a reminder tile; Save clears it.
+- Some OEM battery savers still kill background GPS if Fields is force-stopped or “restricted”.
+
+---
+
 ## [1.4.0] — 2026-08-29: Planet maps on the phone, not in the APK
 
 - **Save maps** keeps the current view (OpenStreetMap streets + Sentinel-2 cloudless) in phone Cache Storage. The APK stays small; you pan anywhere on Earth while you have signal, or save the walk before you lose it.

@@ -10,3 +10,12 @@ project(':capacitor-filesystem').projectDir = new File('../node_modules/@capacit
 
 include ':capacitor-geolocation'
 project(':capacitor-geolocation').projectDir = new File('../node_modules/@capacitor/geolocation/android')
+
+include ':capacitor-network'
+project(':capacitor-network').projectDir = new File('../node_modules/@capacitor/network/android')
+
+include ':capacitor-share'
+project(':capacitor-share').projectDir = new File('../node_modules/@capacitor/share/android')
+
+include ':capgo-background-geolocation'
+project(':capgo-background-geolocation').projectDir = new File('../node_modules/@capgo/background-geolocation/android')

@@ -80,6 +80,7 @@ The WebView calls CoRE and GeoServer **directly** (no Vite proxy). If WMS works 
 ```
 src/App.tsx                 Map, layers, capture, log, Save maps
 src/components/QuickCapture Photo-first note
+src/services/TrackRecorder.ts     GPS track; Android FGS + live notification
 src/services/TileCache.ts          Cache-first OSM + Sentinel-2
 src/services/CoreStackService.ts   X-API-Key, admin + layer URLs
 src/services/IndiaSATService.ts    WMS tiles + GetFeatureInfo

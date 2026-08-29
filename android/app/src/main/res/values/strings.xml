@@ -4,4 +4,5 @@
     <string name="title_activity_main">Fields</string>
     <string name="package_name">org.westernghats.fieldvalidator</string>
     <string name="custom_url_scheme">org.westernghats.fieldvalidator</string>
+    <string name="capacitor_background_geolocation_notification_channel_name">Fields track</string>
 </resources>

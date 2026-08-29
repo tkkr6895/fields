@@ -4,6 +4,7 @@ import { BackgroundGeolocation } from '@capgo/background-geolocation';
 import { v4 as uuidv4 } from 'uuid';
 import { db } from '../db/database';
 import { decidePoint, haversineMeters } from './TrackFilter';
+import { clearTrackStatus, showTrackStatus } from './TrackStatusNotification';
 import type { FieldTrack, LocationData, TrackPoint } from '../types';
 
 type Listener = (track: FieldTrack | null) => void;
@@ -29,6 +30,8 @@ class TrackRecorder {
   private wake: WakeLockSentinel | null = null;
   private watchId: string | number | null = null;
   private persistTimer: ReturnType<typeof setTimeout> | null = null;
+  private notifyTimer: ReturnType<typeof setTimeout> | null = null;
+  private lastNotifyAt = 0;
 
   subscribe(fn: Listener): () => void {
     this.listeners.add(fn);
@@ -54,16 +57,21 @@ class TrackRecorder {
     if (open.status === 'recording') {
       await this.startWatcher();
     }
+    await this.pushStatus(true);
     return open;
   }
 
   async start(name?: string): Promise<FieldTrack> {
-    if (this.track?.status === 'recording') return this.track;
+    if (this.track?.status === 'recording') {
+      await this.pushStatus(true);
+      return this.track;
+    }
     if (this.track?.status === 'paused') {
       this.track.status = 'recording';
       await this.save();
       await this.startWatcher();
       this.emit();
+      await this.pushStatus(true);
       return this.track;
     }
 
@@ -82,6 +90,7 @@ class TrackRecorder {
     await this.save();
     await this.startWatcher();
     this.emit();
+    await this.pushStatus(true);
     return this.track;
   }
 
@@ -91,6 +100,7 @@ class TrackRecorder {
     await this.stopWatcher();
     await this.save();
     this.emit();
+    await this.pushStatus(true);
   }
 
   async resume(): Promise<void> {
@@ -99,6 +109,7 @@ class TrackRecorder {
     await this.save();
     await this.startWatcher();
     this.emit();
+    await this.pushStatus(true);
   }
 
   async stop(): Promise<FieldTrack | null> {
@@ -110,6 +121,7 @@ class TrackRecorder {
     const done = this.track;
     this.track = null;
     this.emit();
+    await clearTrackStatus();
     return done;
   }
 
@@ -119,6 +131,7 @@ class TrackRecorder {
       this.track.observationIds.push(observationId);
       await this.save();
       this.emit();
+      await this.pushStatus(true);
     }
   }
 
@@ -136,6 +149,7 @@ class TrackRecorder {
     }
     this.scheduleSave();
     this.emit();
+    void this.pushStatus(false);
   }
 
   private emit() {
@@ -156,10 +170,32 @@ class TrackRecorder {
     await db.tracks.put(this.track);
   }
 
+  private async pushStatus(force: boolean) {
+    if (!this.track || this.track.status === 'finished') return;
+    const now = Date.now();
+    if (!force && now - this.lastNotifyAt < 8000) {
+      if (!this.notifyTimer) {
+        this.notifyTimer = setTimeout(() => {
+          this.notifyTimer = null;
+          void this.pushStatus(true);
+        }, 8000);
+      }
+      return;
+    }
+    this.lastNotifyAt = now;
+    if (this.notifyTimer) {
+      clearTimeout(this.notifyTimer);
+      this.notifyTimer = null;
+    }
+    await showTrackStatus(this.track);
+  }
+
   private async startWatcher() {
     if (this.running) return;
     this.running = true;
-    await this.requestWakeLock();
+    if (!Capacitor.isNativePlatform()) {
+      await this.requestWakeLock();
+    }
 
     try {
       await Geolocation.requestPermissions();
@@ -169,10 +205,17 @@ class TrackRecorder {
 
     if (Capacitor.isNativePlatform()) {
       try {
+        await BackgroundGeolocation.requestPermissions({
+          permissions: ['location', 'backgroundLocation', 'notification'],
+        });
+      } catch {
+        /* user can still record while the app is open */
+      }
+      try {
         await BackgroundGeolocation.start(
           {
-            backgroundMessage: 'Recording your track on this phone. Stop from Fields when you are done.',
-            backgroundTitle: 'Fields is recording',
+            backgroundMessage: '0 m · 0 notes · waiting for GPS',
+            backgroundTitle: 'Fields · Recording',
             requestPermissions: true,
             stale: false,
             distanceFilter: 0,
@@ -226,6 +269,10 @@ class TrackRecorder {
     }
     this.watchId = null;
     await this.releaseWakeLock();
+    if (this.notifyTimer) {
+      clearTimeout(this.notifyTimer);
+      this.notifyTimer = null;
+    }
     if (this.persistTimer) {
       clearTimeout(this.persistTimer);
       this.persistTimer = null;

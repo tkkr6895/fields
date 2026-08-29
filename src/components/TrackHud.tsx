@@ -28,7 +28,7 @@ const TrackHud: React.FC<TrackHudProps> = ({ track, location, onStart, onPause, 
         <button type="button" className="track-hud__start" onClick={onStart}>
           Start track
         </button>
-        <p>GPS trail on this phone. Notes and photos drop onto it.</p>
+        <p>GPS trail on this phone. Continues with other apps open. Notes and photos drop onto it.</p>
       </div>
     );
   }

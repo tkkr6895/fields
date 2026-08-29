@@ -10,5 +10,17 @@
 	{
 		"pkg": "@capacitor/geolocation",
 		"classpath": "com.capacitorjs.plugins.geolocation.GeolocationPlugin"
+	},
+	{
+		"pkg": "@capacitor/network",
+		"classpath": "com.capacitorjs.plugins.network.NetworkPlugin"
+	},
+	{
+		"pkg": "@capacitor/share",
+		"classpath": "com.capacitorjs.plugins.share.SharePlugin"
+	},
+	{
+		"pkg": "@capgo/background-geolocation",
+		"classpath": "com.capgo.capacitor_background_geolocation.BackgroundGeolocation"
 	}
 ]

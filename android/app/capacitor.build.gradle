@@ -12,10 +12,13 @@ dependencies {
     implementation project(':capacitor-camera')
     implementation project(':capacitor-filesystem')
     implementation project(':capacitor-geolocation')
+    implementation project(':capacitor-network')
+    implementation project(':capacitor-share')
+    implementation project(':capgo-background-geolocation')
 
 }
 
 
 if (hasProperty('postBuildExtras')) {
-  postBuildExtras()
+    postBuildExtras()
 }

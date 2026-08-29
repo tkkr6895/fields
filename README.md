@@ -13,7 +13,7 @@ The git repository **is** the app. There is no nested `field-validator-app/` fol
 
 ## Using the app
 
-1. **Start track** (red button). The device records GNSS (and network location if available) and draws the line. Keep the app in the foreground, or grant background location if the screen will be off.
+1. **Start track** (red button). The device records GNSS (and network location if available) and draws the line. On Android this keeps running with other apps in front, and a persistent notification shows distance, time, notes, and GPS accuracy. Grant **Allow all the time** location (and notifications) so it continues with the screen off.
 2. **Mark a spot** (camera button). A photo is optional. Add a tag (tree, water, crop, built, trail), a name if known, and a short note. During a track this is a waypoint; otherwise it is still a geolocated observation.
 3. **Maps are optional.** IndiaSAT class colour and Tessera RGB fingerprints live under **Maps**. They need a network (and a CoRE Stack key for IndiaSAT). They never block saving a track or a note.
 4. **Share.** Journal → **Share pack** builds a zip on device:

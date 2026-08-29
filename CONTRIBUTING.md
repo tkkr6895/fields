@@ -26,6 +26,7 @@ http://localhost:5173 — Chrome device toolbar at ~390×844 matches the phone l
 | --- | --- |
 | `src/App.tsx` | Tabs, track HUD, Save maps, layer panel |
 | `src/components/` | MapLibre view, capture, journal, settings, onboarding |
+| `src/services/TrackRecorder.ts` | GPS track; Android foreground service + live notification |
 | `src/services/TileCache.ts` | Cache-first `fields://` tiles (OSM + Sentinel-2; Esri live-only) |
 | `src/services/OfflineBasemap.ts` | MapLibre styles |
 | `src/services/SyncEngine.ts` | Background enrich (IndiaSAT, CoRE, weather, GBIF) |

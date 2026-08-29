@@ -9,7 +9,7 @@ Fields is an offline-first PWA (and Capacitor Android wrapper) for **GPS tracks*
 │  Track HUD: Start / Pause / Save                             │
 │  Bottom: Journal | camera | Maps                             │
 └─────────────────────────────────────────────────────────────┘
-        │ Start track = high-accuracy GPS (foreground service on Android)
+        │ Start track = Android foreground service (works with other apps open) + live notification
         │ Camera = note / waypoint (photo optional)
         ▼
   Dexie: tracks, observations, images, customLayers, syncQueue

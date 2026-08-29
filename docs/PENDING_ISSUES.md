@@ -1,8 +1,10 @@
 # Known limitations
 
-Last updated: 2026-08-29 (v1.4.0)
+Last updated: 2026-08-29 (v1.4.1)
 
 These are product and platform constraints, not a personal checklist.
+
+- **Background GPS** continues with other apps open via an Android foreground service. Some OEM battery savers still stop it if Fields is force-stopped or set to “restricted”. Swiping the app away from Recents is usually fine while the track notification is showing.
 
 - **Esri World Imagery** is online-only. Tiles are not stored (licence). Offline satellite is Sentinel-2 (~10 m) for views already cached or saved.
 - **IndiaSAT / CoRE** WMS needs a network and an API key. On the APK, tiles talk to GeoServer directly (no Vite proxy). CORS or the GeoServer TLS certificate can block colouring; tracks and notes still save.
